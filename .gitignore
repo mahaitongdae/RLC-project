@@ -205,6 +205,8 @@ dmypy.json
 .idea/
 ./training/results/
 ./environment/hierarchical_decision/results/
+./environment/utils/models
 ./demonstration/record/
 ./demonstration/utils/models/
+
 test_for_debug.py
