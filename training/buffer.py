@@ -14,6 +14,7 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
 logging.basicConfig(level=logging.INFO)
 
 from utils.segment_tree import SumSegmentTree, MinSegmentTree
