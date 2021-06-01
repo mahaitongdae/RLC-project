@@ -17,6 +17,10 @@ tf.config.experimental.set_visible_devices([], 'GPU')
 tf.config.threading.set_inter_op_parallelism_threads(1)
 tf.config.threading.set_intra_op_parallelism_threads(1)
 
+class LSTMNet(Model):
+    def __init__(self, input_dim, ):
+        super(LSTMNet, self).__init__(name=kwargs['name'])
+        self.model = Sequential
 
 class MLPNet(Model):
     def __init__(self, input_dim, num_hidden_layers, num_hidden_units, hidden_activation, output_dim, **kwargs):
