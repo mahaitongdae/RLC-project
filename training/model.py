@@ -18,13 +18,15 @@ tf.config.threading.set_inter_op_parallelism_threads(1)
 tf.config.threading.set_intra_op_parallelism_threads(1)
 
 class LSTMNet(Model):
-    def __init__(self, input_dim, hidden_size1=128, hidden_size2=32, output_dim=22):
+    def __init__(self, batch=1, timesteps=4, hidden_size1=128, hidden_size2=32, output_dim=10):
         # the output_dim is not decided yet
+        # input_shape=(batch=1, timesteps=4, feature=10)
         super(LSTMNet, self).__init__()
         self.LSTM1 = LSTM(hidden_size1, dropout=0.5, return_sequences=True, dtype=tf.float32)
         self.LSTM2 = LSTM(hidden_size2, dropout=0.5, return_sequences=False, dtype=tf.float32)
         self.Dense = Dense(output_dim, activation='tanh', kernel_initializer=tf.keras.initializers.Orthogonal(1.),
                            bias_initializer=tf.keras.initializers.Constant(0.), dtype=tf.float32)
+        self.build(input_shape=(batch, timesteps, output_dim))
 
     def call(self, inputs):
         h1 = self.LSTM1(inputs)
