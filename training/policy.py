@@ -12,8 +12,10 @@ import numpy as np
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
 
 from model import MLPNet
+from model import AttnNet
+from model_utils import pointwise_feedforward
 
-NAME2MODELCLS = dict([('MLP', MLPNet),])
+NAME2MODELCLS = dict([('MLP', MLPNet), ('Attn', AttnNet)])
 
 class Policy4Lagrange(tf.Module):
     import tensorflow as tf
