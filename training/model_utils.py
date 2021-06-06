@@ -13,7 +13,7 @@ from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import MultiHeadAttention
 from tensorflow.keras.layers import LayerNormalization
-from official.nlp.modeling.layers.position_embedding import RelativePositionEmbedding
+# from official.nlp.modeling.layers.position_embedding import RelativePositionEmbedding
 
 import numpy as np
 import math
@@ -43,6 +43,7 @@ def veh_positional_encoding(position, d_model):
     return tf.cast(pos_encoding, dtype=tf.float32)
 
 
+'''
 class VehsPE(RelativePositionEmbedding):
     def __init__(self,
                  hidden_size,
@@ -78,6 +79,7 @@ class VehsPE(RelativePositionEmbedding):
         assert inputs.shape[2] == self._hidden_size
         inputs = inputs + self.pe[:, :inputs.shape(1)]
         return inputs
+'''
 
 
 def pointwise_feedforward(d_model, d_ff):
@@ -122,43 +124,6 @@ def scaled_dot_product_attention(q, k, v, mask):
     output = tf.matmul(attention_weights, v)  # (..., seq_len_q, depth_v)
 
     return output, attention_weights
-
-
-class SelfAttention(tf.keras.layers.Layer):
-    def __init__(self, d_model):
-        super(SelfAttention, self).__init__()
-        self.d_model = d_model
-
-        self.depth = d_model // self.num_heads
-
-        self.wq = tf.keras.layers.Dense(d_model)
-        self.wk = tf.keras.layers.Dense(d_model)
-        self.wv = tf.keras.layers.Dense(d_model)
-
-        self.dense = tf.keras.layers.Dense(d_model)
-
-    def split_heads(self, x, batch_size):
-        """Split the last dimension into (num_heads, depth).
-        Transpose the result such that the shape is (batch_size, num_heads, seq_len, depth)
-        """
-        x = tf.reshape(x, (batch_size, -1, self.num_heads, self.depth))
-        return tf.transpose(x, perm=[0, 2, 1, 3])
-
-    def call(self, v, k, q, mask):
-        batch_size = tf.shape(q)[0]
-
-        q = self.wq(q)  # (batch_size, seq_len, d_model)
-        k = self.wk(k)  # (batch_size, seq_len, d_model)
-        v = self.wv(v)  # (batch_size, seq_len, d_model)
-
-        # scaled_attention.shape == (batch_size, seq_len_q, depth)
-        # attention_weights.shape == (batch_size, seq_len_q, seq_len_k)
-        scaled_attention, attention_weights = scaled_dot_product_attention(
-            q, k, v, mask)
-
-        output = self.dense(scaled_attention)  # (batch_size, seq_len_q, d_model)
-
-        return output, attention_weights
 
 
 class EncoderLayer(tf.keras.layers.Layer):

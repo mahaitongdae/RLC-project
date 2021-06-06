@@ -10,12 +10,167 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
+from tensorflow.keras.layers import Dense
+from tensorflow.keras import Sequential
 
 from model import MLPNet
 from model import AttnNet
-from model_utils import pointwise_feedforward
 
 NAME2MODELCLS = dict([('MLP', MLPNet), ('Attn', AttnNet)])
+
+
+class AttnPolicy4Lagrange(tf.Module):
+    import tensorflow as tf
+    import tensorflow_probability as tfp
+    tfd = tfp.distributions
+    tfb = tfp.bijectors
+    tf.config.experimental.set_visible_devices([], 'GPU')
+    tf.config.threading.set_inter_op_parallelism_threads(1)
+    tf.config.threading.set_intra_op_parallelism_threads(1)
+
+    def __init__(self, args):
+        super().__init__()
+        self.args = args
+
+        obs_dim, act_dim = self.args.obs_dim, self.args.act_dim
+        mu_dim = self.args.con_dim
+        veh_dim = self.args.veh_dim
+        veh_num = self.args.veh_num
+        ego_dim = self.args.ego_dim
+        tracking_dim = self.args.tracking_dim
+
+        d_model = self.args.d_model
+        num_attn_layers = self.args.num_attn_layers
+        d_ff = self.args.d_ff
+        num_heads = self.args.num_heads
+        dropout = self.args.drop_rate
+        max_len = self.args.max_veh_num
+
+        assert tracking_dim + ego_dim + veh_dim*veh_num == obs_dim
+        assert 4 + veh_num == mu_dim
+
+        backbone_cls = NAME2MODELCLS[self.args.backbone_cls]
+
+        # Attention backbone
+        self.backbone = backbone_cls(ego_dim, obs_dim-tracking_dim-ego_dim, veh_num, tracking_dim,
+                                     num_attn_layers, d_model, d_ff, num_heads, dropout,
+                                     max_len, name='backbone')
+        mu_value_lr_schedule = PolynomialDecay(*self.args.mu_lr_schedule)
+        self.mu_optimizer = self.tf.optimizers.Adam(mu_value_lr_schedule, name='mu_adam_opt')
+
+        self.policy = Sequential([tf.keras.Input(shape=(d_model,)),
+                                  Dense(act_dim * 2, activation=self.args.policy_out_activation,
+                                        kernel_initializer=tf.keras.initializers.Orthogonal(1.),
+                                        bias_initializer = tf.keras.initializers.Constant(0.),
+                                        dtype = tf.float32),])
+        policy_lr_schedule = PolynomialDecay(*self.args.policy_lr_schedule)
+        self.policy_optimizer = self.tf.keras.optimizers.Adam(policy_lr_schedule, name='adam_opt')
+
+        self.value = Sequential([tf.keras.Input(shape=(d_model,)),
+                                 Dense(1, activation='linear',
+                                       kernel_initializer=tf.keras.initializers.Orthogonal(1.),
+                                       bias_initializer=tf.keras.initializers.Constant(0.),
+                                       dtype=tf.float32),])
+        value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
+        self.value_optimizer = self.tf.keras.optimizers.Adam(value_lr_schedule, name='v_adam_opt')
+
+        self.models = (self.backbone, self.policy, self.value)
+        self.optimizers = (self.mu_optimizer, self.policy_optimizer, self.value_optimizer)
+
+    def save_weights(self, save_dir, iteration):
+        model_pairs = [(model.name, model) for model in self.models]
+        optimizer_pairs = [(optimizer._name, optimizer) for optimizer in self.optimizers]
+        ckpt = self.tf.train.Checkpoint(**dict(model_pairs + optimizer_pairs))
+        ckpt.save(save_dir + '/ckpt_ite' + str(iteration))
+
+    def load_weights(self, load_dir, iteration):
+        model_pairs = [(model.name, model) for model in self.models]
+        optimizer_pairs = [(optimizer._name, optimizer) for optimizer in self.optimizers]
+        ckpt = self.tf.train.Checkpoint(**dict(model_pairs + optimizer_pairs))
+        ckpt.restore(load_dir + '/ckpt_ite' + str(iteration) + '-1')
+
+    def get_weights(self):
+        return [model.get_weights() for model in self.models]
+
+    def set_weights(self, weights):
+        for i, weight in enumerate(weights):
+            self.models[i].set_weights(weight)
+
+    @tf.function
+    def apply_gradients(self, iteration, grads):
+        policy_len = len(self.policy.trainable_weights)
+        value_len = len(self.value.trainable_weights)
+        policy_grad, value_grad, mu_grad = grads[:policy_len], grads[policy_len:policy_len + value_len], grads[
+                                                                                                         policy_len + value_len:]
+        self.policy_optimizer.apply_gradients(zip(policy_grad, self.policy.trainable_weights))
+        self.value_optimizer.apply_gradients(zip(value_grad, self.value.trainable_weights))
+        if iteration % self.args.mu_update_interval == 0:
+            self.mu_optimizer.apply_gradients(zip(mu_grad, self.backbone.trainable_weights))
+
+    @tf.function
+    def compute_mode(self, obs):
+        logits = self.policy(obs)
+        mean, _ = self.tf.split(logits, num_or_size_splits=2, axis=-1)
+        return self.args.action_range * self.tf.tanh(mean) if self.args.action_range is not None else mean
+
+    def _logits2dist(self, logits):
+        mean, log_std = self.tf.split(logits, num_or_size_splits=2, axis=-1)
+        act_dist = self.tfd.MultivariateNormalDiag(mean, self.tf.exp(log_std))
+        if self.args.action_range is not None:
+            act_dist = (
+                self.tfp.distributions.TransformedDistribution(
+                    distribution=act_dist,
+                    bijector=self.tfb.Chain(
+                        [self.tfb.Affine(scale_identity_multiplier=self.args.action_range),
+                         self.tfb.Tanh()])
+                ))
+        return act_dist
+
+    @tf.function
+    def compute_mu(self, obs, nonpadding_ind, training=True):
+        def create_padding_mask(batch_size, seq_len, nonpadding_ind):
+            nonpadding_ind = tf.concat(tf.ones((batch_size,1)), nonpadding_ind, axis=-1)
+            repaet_times = tf.constant([1, seq_len, 1], tf.int32)
+            return tf.tile(nonpadding_ind, repaet_times)
+
+        def create_mu_mask(batch_size, seq_len):
+            mask = np.identity(seq_len, dtype=np.float32)
+            mask[:, 0] = 1
+            mask[0, :] = 1
+            mask = mask[np.newaxis, :, :]
+            return tf.convert_to_tensor(np.repeat(mask, repeats=batch_size, axis=0), dtype=tf.float32)
+
+        with self.tf.name_scope('compute_mu') as scope:
+            batch_size = tf.shape(obs)[0]
+            seq_len = self.args.veh_num+1
+            x_ego = tf.expand_dims(obs[:, self.args.ego_dim+self.args.tracking_dim], axis=1)
+            x_vehs = tf.reshape(obs[:, self.args.ego_dim+self.args.tracking_dim:], (batch_size, -1, self.args.veh_dim))
+            assert tf.shape(x_vehs)[1] == self.args.veh_num
+
+            hidden, attn_weights = self.backbone(x_ego, x_vehs,
+                                                 padding_mask=create_padding_mask(batch_size, seq_len, nonpadding_ind),
+                                                 mu_mask=create_mu_mask(batch_size, seq_len),
+                                                 training=training)
+            return hidden[:, 0, :], attn_weights[:, :, 0, 1:]
+
+    @tf.function
+    def compute_action(self, hidden):
+        with self.tf.name_scope('compute_action') as scope:
+            logits = self.policy(hidden)
+            if self.args.deterministic_policy:
+                mean, log_std = self.tf.split(logits, num_or_size_splits=2, axis=-1)
+                return self.args.action_range * self.tf.tanh(mean) if self.args.action_range is not None else mean, 0.
+            else:
+                act_dist = self._logits2dist(logits)
+                actions = act_dist.sample()
+                logps = act_dist.log_prob(actions)
+                return actions, logps
+
+    @tf.function
+    def compute_v(self, hidden):
+        with self.tf.name_scope('compute_v') as scope:
+            return tf.squeeze(self.value(hidden), axis=1)
+
 
 class Policy4Lagrange(tf.Module):
     import tensorflow as tf
@@ -233,7 +388,7 @@ class Policy4Toyota(tf.Module):
     #     with self.tf.name_scope('compute_con_v') as scope:
     #         return tf.squeeze(self.con_v(obs), axis=1)
 
-
+'''
 def test_policy():
     import gym
     from train_script import built_mixedpg_parser
@@ -298,7 +453,8 @@ def test_mlp():
 
     gradient = tape.gradient(loss, policy.trainable_weights)
     print(gradient)
-
+'''
 
 if __name__ == '__main__':
-    test_policy_with_Qs()
+    pass
+    # test_policy_with_Qs()

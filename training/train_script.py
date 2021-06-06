@@ -146,6 +146,9 @@ def built_AMPC_parser():
     parser.add_argument('--model_load_ite', type=int, default=None)
     parser.add_argument('--ppc_load_dir', type=str, default=None)
 
+    # Attention, added by YDJ
+
+
     return parser.parse_args()
 
 def built_parser(alg_name):
@@ -158,6 +161,11 @@ def built_parser(alg_name):
                          [1., 1 / 15., 0.2] + \
                          [1., 1., 1 / 15.] * args.env_kwargs_num_future_data + \
                          [1 / 30., 1 / 30., 0.2, 1 / 180.] * env.veh_num
+        # NEW ADD BY YDJ
+        args.veh_dim = env.per_veh_info_dim
+        args.veh_num = env.veh_num
+        args.ego_dim = env.ego_info_dim
+        args.tracking_dim = env.per_tracking_info_dim
         return args
 
 def main(alg_name):

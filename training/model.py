@@ -10,9 +10,9 @@
 import tensorflow as tf
 from tensorflow import Variable
 from tensorflow.keras import Model, Sequential
-from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.layers import Dense, Dropout, MultiHeadAttention
 
-from model_utils import *
+from model_utils import veh_positional_encoding, EncoderLayer
 
 import numpy as np
 
@@ -80,10 +80,10 @@ class AttnNet(Model):
 
         self.attn_layers = [EncoderLayer(d_model, num_heads, d_ff, dropout)
                             for _ in range(self.num_layers-1)]
-        self.out_attn = SelfAttention(d_model)
+        self.out_attn = MultiHeadAttention(num_heads, d_model, dropout=dropout)
 
 
-    def call(self, x_ego, x_vehs, training, padding_mask, mu_mask):
+    def call(self, x_ego, x_vehs, padding_mask, mu_mask, training=True):
         assert tf.shape(x_ego)[2] == self.ego_dim
         assert tf.shape(x_vehs)[2] == self.veh_dim
         assert tf.shape(x_vehs)[1] == self.veh_num
@@ -92,16 +92,17 @@ class AttnNet(Model):
         x1 = self.ego_embedding(x_ego)
         x2 = self.vehs_embedding(x_vehs)
         x = tf.concat([x1, x2], axis=1)
-        x += self.pe[:, :seq_len, :]
         assert tf.shape(x)[1] == seq_len
+        x += self.pe[:, :seq_len, :]
 
         x = self.dropout(x, training=training)
 
         for i in range(self.num_layers-1):
             x = self.attn_layers[i](x, training, padding_mask)
 
-        output_mask = tf.logical_or(padding_mask, mu_mask)
-        x, attn_weights = self.out_attn(x, x, x, output_mask)
+        output_mask = tf.logical_and(padding_mask, mu_mask)
+        x, attn_weights = self.out_attn(x, x, attention_mask=output_mask,
+                                        return_attention_scores=True, training=training)
 
         return x, attn_weights
 
