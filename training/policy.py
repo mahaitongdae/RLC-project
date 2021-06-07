@@ -49,6 +49,9 @@ class AttnPolicy4Lagrange(tf.Module):
         assert tracking_dim + ego_dim + veh_dim*veh_num == obs_dim
         assert 4 + veh_num * 4 == mu_dim
 
+        n_hiddens, n_units, hidden_activation = self.args.num_hidden_layers, self.args.num_hidden_units, self.args.hidden_activation
+        value_model_cls, policy_model_cls = NAME2MODELCLS[self.args.value_model_cls], \
+                                            NAME2MODELCLS[self.args.policy_model_cls]
         backbone_cls = NAME2MODELCLS[self.args.backbone_cls]
 
         # Attention backbone
@@ -58,14 +61,16 @@ class AttnPolicy4Lagrange(tf.Module):
         mu_value_lr_schedule = PolynomialDecay(*self.args.mu_lr_schedule)
         self.mu_optimizer = self.tf.optimizers.Adam(mu_value_lr_schedule, name='mu_adam_opt')
 
-        self.policy = Sequential([tf.keras.layers.InputLayer(input_shape=(d_model,)),
-                                  Dense(d_model, activation=self.args.policy_out_activation,
-                                        kernel_initializer=tf.keras.initializers.Orthogonal(np.sqrt(2.)),
-                                        dtype=tf.float32),
-                                  Dense(act_dim * 2, activation=self.args.policy_out_activation,
-                                        kernel_initializer=tf.keras.initializers.Orthogonal(1.),
-                                        bias_initializer = tf.keras.initializers.Constant(0.),
-                                        dtype = tf.float32),])
+        # self.policy = Sequential([tf.keras.layers.InputLayer(input_shape=(d_model,)),
+        #                           Dense(d_model, activation=self.args.policy_out_activation,
+        #                                 kernel_initializer=tf.keras.initializers.Orthogonal(np.sqrt(2.)),
+        #                                 dtype=tf.float32),
+        #                           Dense(act_dim * 2, activation=self.args.policy_out_activation,
+        #                                 kernel_initializer=tf.keras.initializers.Orthogonal(1.),
+        #                                 bias_initializer = tf.keras.initializers.Constant(0.),
+        #                                 dtype = tf.float32),])
+        self.policy = policy_model_cls(d_model, n_hiddens, n_units, hidden_activation, act_dim * 2, name='policy',
+                                       output_activation=self.args.policy_out_activation)
         policy_lr_schedule = PolynomialDecay(*self.args.policy_lr_schedule)
         self.policy_optimizer = self.tf.keras.optimizers.Adam(policy_lr_schedule, name='adam_opt')
 
@@ -151,9 +156,13 @@ class AttnPolicy4Lagrange(tf.Module):
 
             assert x_vehs.shape[1] == self.args.veh_num
 
-            hidden, attn_weights = self.backbone(x_ego, x_vehs,
-                                                 padding_mask=create_padding_mask(batch_size, seq_len, nonpadding_ind),
-                                                 mu_mask=create_mu_mask(batch_size, seq_len),
+            # hidden, attn_weights = self.backbone(x_ego, x_vehs,
+            #                                      padding_mask=create_padding_mask(batch_size, seq_len, nonpadding_ind),
+            #                                      mu_mask=create_mu_mask(batch_size, seq_len),
+            #                                      training=training)
+            hidden, attn_weights = self.backbone([x_ego, x_vehs,
+                                                   create_padding_mask(batch_size, seq_len, nonpadding_ind),
+                                                   create_mu_mask(batch_size, seq_len),],
                                                  training=training)
             mu_attn = attn_weights[:, :, 0, 1:]
             return hidden[:, 0, :], tf.cast(tf.exp(5*mu_attn)-1, dtype=tf.float32)

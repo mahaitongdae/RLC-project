@@ -11,10 +11,10 @@ import logging
 
 import gym
 import numpy as np
-from gym.envs.user_defined.toyota_lag.dynamics_and_models import EnvironmentModel
+from gym.envs.user_defined.rlc.dynamics_and_models import EnvironmentModel
 
-from preprocessor import Preprocessor
-from utils.misc import TimerStat, args2envkwargs
+from training.preprocessor import Preprocessor
+from training.utils.misc import TimerStat, args2envkwargs
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
