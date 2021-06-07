@@ -26,7 +26,7 @@ from sumolib import checkBinary
 import traci
 from traci.exceptions import FatalTraCIError
 from endtoend_env_utils import shift_and_rotate_coordination, _convert_car_coord_to_sumo_coord, \
-    _convert_sumo_coord_to_car_coord, xy2_edgeID_lane, SUMOCFG_DIR, TASK2ROUTEID
+    _convert_sumo_coord_to_car_coord, xy2_edgeID_lane, SUMOCFG_DIR
 
 SUMO_BINARY = checkBinary('sumo')
 SIM_PERIOD = 1.0 / 10
@@ -53,7 +53,8 @@ class Traffic(object):
         self.mode = mode
         self.training_light_phase = 0
         self.training_task = training_task
-        self.ego_route = TASK2ROUTEID[self.training_task]
+        task2route = {'left': 'dl', 'straight': 'du', 'right': 'dr'}
+        self.ego_route = task2route[self.training_task]
         if training_task == 'right':
             if random.random() > 0.5:
                 self.training_light_phase = 2
@@ -62,7 +63,7 @@ class Traffic(object):
             traci.start(
                 [SUMO_BINARY, "-c", SUMOCFG_DIR,
                  "--step-length", self.step_time_str,
-                 "--lateral-resolution", "3.5",
+                 "--lateral-resolution", "3.75",
                  "--random",
                  # "--start",
                  # "--quit-on-end",
@@ -125,12 +126,12 @@ class Traffic(object):
             ego_x_in_sumo, ego_y_in_sumo, ego_a_in_sumo = _convert_car_coord_to_sumo_coord(ego_x, ego_y, ego_phi, ego_l)
             edgeID, lane = xy2_edgeID_lane(ego_x, ego_y)
             try:
-                traci.vehicle.remove(egoID)
+                traci.vehicle.remove(vehID=egoID)
             except traci.exceptions.TraCIException:
-                print('Don\'t worry, it\'s been handled well')
+                pass
             traci.simulationStep()
             traci.vehicle.addLegacy(vehID=egoID, routeID=ego_dict['routeID'],
-                                    # depart=0, pos=20, lane=lane, speed=ego_dict['v_x'],
+                                    #depart=0, pos=20, lane=lane, speed=ego_dict['v_x'],
                                     typeID='self_car')
             traci.vehicle.moveToXY(egoID, edgeID, lane, ego_x_in_sumo, ego_y_in_sumo, ego_a_in_sumo, keepRoute=1)
             traci.vehicle.setLength(egoID, ego_dict['l'])
@@ -186,7 +187,7 @@ class Traffic(object):
                                                                                                            a_in_ego_coord)
                 if (-5 < x_in_ego_coord < 1 * (ego_v_x) + ego_l/2. + veh_l/2. + 2 and abs(y_in_ego_coord) < 3) or \
                         (-5 < ego_x_in_veh_coord < 1 * (veh_v) + ego_l/2. + veh_l/2. + 2 and abs(ego_y_in_veh_coord) <3):
-                    traci.vehicle.moveToXY(veh, '4i', 1, -80, 1.85, 180, 2)
+                    traci.vehicle.moveToXY(veh, '4i', 1, -80, 1.85, 180, 2) #TODO: check
                     # traci.vehicle.remove(vehID=veh)
                 # if 0<x_in_sumo<3.5 and -22<y_in_sumo<-15:# and veh_sig!=1 and veh_sig!=9:
                 #     traci.vehicle.moveToXY(veh, '4o', 1, -80, 1.85, 180,2)
