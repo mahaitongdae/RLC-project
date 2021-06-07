@@ -146,6 +146,17 @@ def built_AMPC_parser():
     parser.add_argument('--model_load_ite', type=int, default=None)
     parser.add_argument('--ppc_load_dir', type=str, default=None)
 
+    # Attention, added by YDJ
+    parser.add_argument('--num_attn_layers', type=int, default=3)
+    parser.add_argument('--con_dim', type=int, default=32)
+    parser.add_argument('--d_model', type=int, default=128)
+    parser.add_argument('--d_ff', type=int, default=256)
+    parser.add_argument('--num_heads', type=int, default=4)
+    parser.add_argument('--drop_rate', type=float, default=0.1)
+    parser.add_argument('--max_veh_num', type=int, default=10)
+    parser.add_argument('--backbone_cls', type=str, default='Attn')
+    parser.add_argument('--mu_lr_schedule', type=list, default=[8e-5, 150000, 1e-5])
+
     return parser.parse_args()
 
 def built_parser(alg_name):
@@ -158,6 +169,11 @@ def built_parser(alg_name):
                          [1., 1 / 15., 0.2] + \
                          [1., 1., 1 / 15.] * args.env_kwargs_num_future_data + \
                          [1 / 30., 1 / 30., 0.2, 1 / 180.] * env.veh_num
+        # NEW ADD BY YDJ
+        args.veh_dim = env.per_veh_info_dim
+        args.veh_num = env.veh_num
+        args.ego_dim = env.ego_info_dim
+        args.tracking_dim = env.per_tracking_info_dim
         return args
 
 def main(alg_name):
