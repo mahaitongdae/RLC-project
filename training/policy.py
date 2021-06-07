@@ -12,7 +12,7 @@ import numpy as np
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
 
 from model import MLPNet
-
+from model import LSTMNet
 NAME2MODELCLS = dict([('MLP', MLPNet),])
 
 
@@ -46,8 +46,14 @@ class Policy4Toyota(tf.Module):
         # con_value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
         # self.con_value_optimizer = self.tf.keras.optimizers.Adam(con_value_lr_schedule, name='conv_adam_opt')
 
-        self.models = (self.obj_v, self.policy,)
-        self.optimizers = (self.obj_value_optimizer, self.policy_optimizer)
+        # the predictions of surrounding vehicles' network
+        self.surroundings = LSTMNet()
+        surroundings_lr_schedule = PolynomialDecay(initial_learning_rate=3e-5, decay_steps=150000, end_learning_rate=1e-5)
+        self.surroundings_optimizer = self.tf.keras.optimizers.Adam(surroundings_lr_schedule)
+
+        # 在这里都放进来了
+        self.models = (self.obj_v, self.policy, self.surroundings)
+        self.optimizers = (self.obj_value_optimizer, self.policy_optimizer, self.surroundings_optimizer)
 
     def save_weights(self, save_dir, iteration):
         model_pairs = [(model.name, model) for model in self.models]
@@ -70,12 +76,15 @@ class Policy4Toyota(tf.Module):
 
     @tf.function
     def apply_gradients(self, iteration, grads):
+        # 注意这里的grads加了lstm网络的部分
         obj_v_len = len(self.obj_v.trainable_weights)
+        policy_len = len(self.policy.trainable_weights)
         # con_v_len = len(self.con_v.trainable_weights)
-        obj_v_grad, policy_grad = grads[:obj_v_len], grads[obj_v_len:]
+        obj_v_grad, policy_grad, surroundings_grad = grads[:obj_v_len], grads[obj_v_len:(obj_v_len+policy_len)], grads[(obj_v_len+policy_len):]
         self.obj_value_optimizer.apply_gradients(zip(obj_v_grad, self.obj_v.trainable_weights))
         # self.con_value_optimizer.apply_gradients(zip(con_v_grad, self.con_v.trainable_weights))
         self.policy_optimizer.apply_gradients(zip(policy_grad, self.policy.trainable_weights))
+        self.surroundings_optimizer.apply_gradients(zip(surroundings_grad, self.surroundings.trainable_weights))
 
     @tf.function
     def compute_mode(self, obs):
