@@ -59,12 +59,13 @@ class LMAMPCLearnerv3(object):
         return self.info_for_buffer
 
     def get_batch_data(self, batch_data, rb, indexes):
-        self.batch_data = {'batch_obs': batch_data[0].astype(np.float32),
+        self.batch_data = {'batch_obs': batch_data[0][:self.args.obs_dim].astype(np.float32),
                            'batch_actions': batch_data[1].astype(np.float32),
                            'batch_rewards': batch_data[2].astype(np.float32),
                            'batch_obs_tp1': batch_data[3].astype(np.float32),
                            'batch_dones': batch_data[4].astype(np.float32),
-                           'batch_ref_index': batch_data[5].astype(np.int32)
+                           'batch_ref_index': batch_data[5].astype(np.int32),
+                           'batch_padding_index': batch_data[0][self.args.obs_dim].astype(np.float32)
                            }
 
     def get_weights(self):

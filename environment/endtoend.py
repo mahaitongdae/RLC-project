@@ -287,7 +287,7 @@ class CrossroadEnd2end(gym.Env):
         ego_phi = self.ego_dynamics['phi']
         ego_v_x = self.ego_dynamics['v_x']
 
-        vehs_vector = self._construct_veh_vector_short(exit_)
+        vehs_vector, padding_vector = self._construct_veh_vector_short(exit_)
         ego_vector = self._construct_ego_vector_short()
         tracking_error = self.ref_path.tracking_error_vector(np.array([ego_x], dtype=np.float32),
                                                              np.array([ego_y], dtype=np.float32),
@@ -296,7 +296,7 @@ class CrossroadEnd2end(gym.Env):
                                                              self.num_future_data, func=func).numpy()[0]
         self.per_tracking_info_dim = 3
 
-        vector = np.concatenate((ego_vector, tracking_error, vehs_vector), axis=0)
+        vector = np.concatenate((ego_vector, tracking_error, vehs_vector, padding_vector), axis=0)
         # vector = self.convert_vehs_to_rela(vector)
 
         return vector
@@ -341,6 +341,7 @@ class CrossroadEnd2end(gym.Env):
         ego_y = self.ego_dynamics['y']
         v_light = self.v_light
         vehs_vector = []
+        padding_vector = []
 
         name_settings = dict(D=dict(do='1o', di='1i', ro='2o', ri='2i', uo='3o', ui='3i', lo='4o', li='4i'),
                              R=dict(do='2o', di='2i', ro='3o', ri='3i', uo='4o', ui='4i', lo='1o', li='1i'),
@@ -352,6 +353,7 @@ class CrossroadEnd2end(gym.Env):
         def filter_interested_vehicles(vs, task):
             dl, du, dr, rd, rl, ru, ur, ud, ul, lu, lr, ld = [], [], [], [], [], [], [], [], [], [], [], []
             for v in vs:
+                v.update(dict(pad=1.))
                 route_list = v['route']
                 start = route_list[0]
                 end = route_list[1]
@@ -438,23 +440,24 @@ class CrossroadEnd2end(gym.Env):
                 if len(sorted_list) >= num:
                     return sorted_list[:num]
                 else:
+                    real_veh_len = len(sorted_list)
                     while len(sorted_list) < num:
                         sorted_list.append(fill_value)
                     return sorted_list
 
-            fill_value_for_dl = dict(x=LANE_WIDTH_UD/2, y=-(CROSSROAD_D_HEIGHT+30), v=0, phi=90, w=2.5, l=5, route=('1o', '4i'))
-            fill_value_for_du = dict(x=LANE_WIDTH_UD/2, y=-(CROSSROAD_D_HEIGHT+30), v=0, phi=90, w=2.5, l=5, route=('1o', '3i'))
-            fill_value_for_dr = dict(x=LANE_WIDTH_UD*(LANE_NUMBER_UD-0.5), y=-(CROSSROAD_D_HEIGHT+30), v=0, phi=90, w=2.5, l=5, route=('1o', '2i'))
+            fill_value_for_dl = dict(x=LANE_WIDTH_UD/2, y=-(CROSSROAD_D_HEIGHT+30), v=0, phi=90, w=2.5, l=5, route=('1o', '4i'), pad=0.)
+            fill_value_for_du = dict(x=LANE_WIDTH_UD/2, y=-(CROSSROAD_D_HEIGHT+30), v=0, phi=90, w=2.5, l=5, route=('1o', '3i'), pad=0.)
+            fill_value_for_dr = dict(x=LANE_WIDTH_UD*(LANE_NUMBER_UD-0.5), y=-(CROSSROAD_D_HEIGHT+30), v=0, phi=90, w=2.5, l=5, route=('1o', '2i'), pad=0.)
 
-            fill_value_for_ru = dict(x=(CROSSROAD_HALF_WIDTH+15), y=LANE_WIDTH_LR*(LANE_NUMBER_LR-0.5), v=0, phi=180, w=2.5, l=5, route=('2o', '3i'))
+            fill_value_for_ru = dict(x=(CROSSROAD_HALF_WIDTH+15), y=LANE_WIDTH_LR*(LANE_NUMBER_LR-0.5), v=0, phi=180, w=2.5, l=5, route=('2o', '3i'), pad=0.)
 
-            fill_value_for_ur_straight = dict(x=-LANE_WIDTH_UD/2, y=(CROSSROAD_U_HEIGHT+20), v=0, phi=-90, w=2.5, l=5, route=('3o', '2i'))
-            fill_value_for_ur_right = dict(x=-LANE_WIDTH_UD/2, y=(CROSSROAD_U_HEIGHT+20), v=0, phi=-90, w=2.5, l=5, route=('3o', '2i'))
+            fill_value_for_ur_straight = dict(x=-LANE_WIDTH_UD/2, y=(CROSSROAD_U_HEIGHT+20), v=0, phi=-90, w=2.5, l=5, route=('3o', '2i'), pad=0.)
+            fill_value_for_ur_right = dict(x=-LANE_WIDTH_UD/2, y=(CROSSROAD_U_HEIGHT+20), v=0, phi=-90, w=2.5, l=5, route=('3o', '2i'), pad=0.)
 
-            fill_value_for_ud = dict(x=-LANE_WIDTH_UD*0.5, y=(CROSSROAD_U_HEIGHT+20), v=0, phi=-90, w=2.5, l=5, route=('3o', '1i'))
-            fill_value_for_ul = dict(x=-LANE_WIDTH_UD*(LANE_NUMBER_UD-0.5), y=(CROSSROAD_U_HEIGHT+20), v=0, phi=-90, w=2.5, l=5, route=('3o', '4i'))
+            fill_value_for_ud = dict(x=-LANE_WIDTH_UD*0.5, y=(CROSSROAD_U_HEIGHT+20), v=0, phi=-90, w=2.5, l=5, route=('3o', '1i'), pad=0.)
+            fill_value_for_ul = dict(x=-LANE_WIDTH_UD*(LANE_NUMBER_UD-0.5), y=(CROSSROAD_U_HEIGHT+20), v=0, phi=-90, w=2.5, l=5, route=('3o', '4i'), pad=0.)
 
-            fill_value_for_lr = dict(x=-(CROSSROAD_HALF_WIDTH+20), y=-LANE_WIDTH_LR*1.5, v=0, phi=0, w=2.5, l=5, route=('4o', '2i'))
+            fill_value_for_lr = dict(x=-(CROSSROAD_HALF_WIDTH+20), y=-LANE_WIDTH_LR*1.5, v=0, phi=0, w=2.5, l=5, route=('4o', '2i'), pad=0.)
 
             tmp = OrderedDict()
             if task == 'left':
@@ -481,10 +484,11 @@ class CrossroadEnd2end(gym.Env):
             list_of_interested_veh_dict.extend(part)
 
         for veh in list_of_interested_veh_dict:
-            veh_x, veh_y, veh_v, veh_phi = veh['x'], veh['y'], veh['v'], veh['phi']
+            veh_x, veh_y, veh_v, veh_phi, veh_pad = veh['x'], veh['y'], veh['v'], veh['phi'], veh['pad']
             vehs_vector.extend([veh_x, veh_y, veh_v, veh_phi])
+            padding_vector.extend([veh_pad])
         self.per_veh_info_dim = 4
-        return np.array(vehs_vector, dtype=np.float32)
+        return np.array(vehs_vector, dtype=np.float32), np.array(padding_vector, dtype=np.float32)
 
     def recover_orig_position_fn(self, transformed_x, transformed_y, x, y, d):  # x, y, d are used to transform
         # coordination
