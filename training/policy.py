@@ -47,7 +47,7 @@ class AttnPolicy4Lagrange(tf.Module):
         max_len = self.args.max_veh_num
 
         assert tracking_dim + ego_dim + veh_dim*veh_num == obs_dim
-        assert 4 + veh_num == mu_dim
+        assert 4 + veh_num * 4 == mu_dim
 
         backbone_cls = NAME2MODELCLS[self.args.backbone_cls]
 
@@ -58,7 +58,10 @@ class AttnPolicy4Lagrange(tf.Module):
         mu_value_lr_schedule = PolynomialDecay(*self.args.mu_lr_schedule)
         self.mu_optimizer = self.tf.optimizers.Adam(mu_value_lr_schedule, name='mu_adam_opt')
 
-        self.policy = Sequential([tf.keras.Input(shape=(d_model,)),
+        self.policy = Sequential([tf.keras.layers.InputLayer(input_shape=(d_model,)),
+                                  Dense(d_model, activation=self.args.policy_out_activation,
+                                        kernel_initializer=tf.keras.initializers.Orthogonal(np.sqrt(2.)),
+                                        dtype=tf.float32),
                                   Dense(act_dim * 2, activation=self.args.policy_out_activation,
                                         kernel_initializer=tf.keras.initializers.Orthogonal(1.),
                                         bias_initializer = tf.keras.initializers.Constant(0.),
@@ -66,16 +69,16 @@ class AttnPolicy4Lagrange(tf.Module):
         policy_lr_schedule = PolynomialDecay(*self.args.policy_lr_schedule)
         self.policy_optimizer = self.tf.keras.optimizers.Adam(policy_lr_schedule, name='adam_opt')
 
-        self.value = Sequential([tf.keras.Input(shape=(d_model,)),
-                                 Dense(1, activation='linear',
-                                       kernel_initializer=tf.keras.initializers.Orthogonal(1.),
-                                       bias_initializer=tf.keras.initializers.Constant(0.),
-                                       dtype=tf.float32),])
-        value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
-        self.value_optimizer = self.tf.keras.optimizers.Adam(value_lr_schedule, name='v_adam_opt')
+        # self.value = Sequential([tf.keras.Input(shape=(d_model,)),
+        #                          Dense(1, activation='linear',
+        #                                kernel_initializer=tf.keras.initializers.Orthogonal(1.),
+        #                                bias_initializer=tf.keras.initializers.Constant(0.),
+        #                                dtype=tf.float32),])
+        # value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
+        # self.value_optimizer = self.tf.keras.optimizers.Adam(value_lr_schedule, name='v_adam_opt')
 
-        self.models = (self.backbone, self.policy, self.value)
-        self.optimizers = (self.mu_optimizer, self.policy_optimizer, self.value_optimizer)
+        self.models = (self.backbone, self.policy)
+        self.optimizers = (self.mu_optimizer, self.policy_optimizer)
 
     def save_weights(self, save_dir, iteration):
         model_pairs = [(model.name, model) for model in self.models]
@@ -99,11 +102,8 @@ class AttnPolicy4Lagrange(tf.Module):
     @tf.function
     def apply_gradients(self, iteration, grads):
         policy_len = len(self.policy.trainable_weights)
-        value_len = len(self.value.trainable_weights)
-        policy_grad, value_grad, mu_grad = grads[:policy_len], grads[policy_len:policy_len + value_len], grads[
-                                                                                                         policy_len + value_len:]
+        policy_grad, mu_grad = grads[:policy_len], grads[policy_len:]
         self.policy_optimizer.apply_gradients(zip(policy_grad, self.policy.trainable_weights))
-        self.value_optimizer.apply_gradients(zip(value_grad, self.value.trainable_weights))
         if iteration % self.args.mu_update_interval == 0:
             self.mu_optimizer.apply_gradients(zip(mu_grad, self.backbone.trainable_weights))
 
@@ -129,8 +129,11 @@ class AttnPolicy4Lagrange(tf.Module):
     @tf.function
     def compute_mu(self, obs, nonpadding_ind, training=True):
         def create_padding_mask(batch_size, seq_len, nonpadding_ind):
-            nonpadding_ind = tf.concat(tf.ones((batch_size,1)), nonpadding_ind, axis=-1)
+            nonpadding_ind = tf.cast(nonpadding_ind, dtype=tf.float32)
+            nonpadding_ind = tf.concat([tf.ones((batch_size,1)), nonpadding_ind], axis=-1)
+            nonpadding_ind = tf.reshape(nonpadding_ind, (batch_size, 1, -1))
             repaet_times = tf.constant([1, seq_len, 1], tf.int32)
+
             return tf.tile(nonpadding_ind, repaet_times)
 
         def create_mu_mask(batch_size, seq_len):
@@ -141,20 +144,24 @@ class AttnPolicy4Lagrange(tf.Module):
             return tf.convert_to_tensor(np.repeat(mask, repeats=batch_size, axis=0), dtype=tf.float32)
 
         with self.tf.name_scope('compute_mu') as scope:
-            batch_size = tf.shape(obs)[0]
+            batch_size = (obs).shape[0]
             seq_len = self.args.veh_num+1
-            x_ego = tf.expand_dims(obs[:, self.args.ego_dim+self.args.tracking_dim], axis=1)
+            x_ego = tf.expand_dims(obs[:, :self.args.ego_dim+self.args.tracking_dim], axis=1)
             x_vehs = tf.reshape(obs[:, self.args.ego_dim+self.args.tracking_dim:], (batch_size, -1, self.args.veh_dim))
-            assert tf.shape(x_vehs)[1] == self.args.veh_num
+
+            assert x_vehs.shape[1] == self.args.veh_num
 
             hidden, attn_weights = self.backbone(x_ego, x_vehs,
                                                  padding_mask=create_padding_mask(batch_size, seq_len, nonpadding_ind),
                                                  mu_mask=create_mu_mask(batch_size, seq_len),
                                                  training=training)
-            return hidden[:, 0, :], attn_weights[:, :, 0, 1:]
+            mu_attn = attn_weights[:, :, 0, 1:]
+            return hidden[:, 0, :], tf.cast(tf.exp(5*mu_attn)-1, dtype=tf.float32)
 
     @tf.function
-    def compute_action(self, hidden):
+    def compute_action(self, obs, nonpadding_ind, training=True):
+        hidden, _ = self.compute_mu(obs, nonpadding_ind, training)
+        hidden = tf.stop_gradient(hidden)
         with self.tf.name_scope('compute_action') as scope:
             logits = self.policy(hidden)
             if self.args.deterministic_policy:
@@ -166,10 +173,10 @@ class AttnPolicy4Lagrange(tf.Module):
                 logps = act_dist.log_prob(actions)
                 return actions, logps
 
-    @tf.function
-    def compute_v(self, hidden):
-        with self.tf.name_scope('compute_v') as scope:
-            return tf.squeeze(self.value(hidden), axis=1)
+    # @tf.function
+    # def compute_v(self, hidden):
+    #     with self.tf.name_scope('compute_v') as scope:
+    #         return tf.squeeze(self.value(hidden), axis=1)
 
 
 class Policy4Lagrange(tf.Module):
@@ -454,7 +461,124 @@ def test_mlp():
     gradient = tape.gradient(loss, policy.trainable_weights)
     print(gradient)
 '''
+def test_attn_policy():
+    import tensorflow as tf
+    import numpy as np
+    import argparse
+    import warnings
+    warnings.filterwarnings('ignore')
+
+    def built_AMPC_parser():
+        parser = argparse.ArgumentParser()
+
+        parser.add_argument('--mode', type=str, default='training')  # training testing
+
+        # trainer
+        parser.add_argument('--policy_type', type=str, default='Policy4Toyota')
+        parser.add_argument('--worker_type', type=str, default='OffPolicyWorker')
+        parser.add_argument('--evaluator_type', type=str, default='Evaluator')
+        parser.add_argument('--buffer_type', type=str, default='normal')
+        parser.add_argument('--optimizer_type', type=str, default='OffPolicyAsync')
+        parser.add_argument('--off_policy', type=str, default=True)
+
+        # env
+        parser.add_argument('--env_id', default='CrossroadEnd2end-v20')
+        parser.add_argument('--env_kwargs_num_future_data', type=int, default=0)
+        parser.add_argument('--env_kwargs_training_task', type=str, default='left')
+        parser.add_argument('--obs_dim', default=None)
+        parser.add_argument('--act_dim', default=None)
+
+        # learner
+        parser.add_argument('--alg_name', default='AMPC')
+        parser.add_argument('--M', type=int, default=1)
+        parser.add_argument('--num_rollout_list_for_policy_update', type=list, default=[25])
+        parser.add_argument('--gamma', type=float, default=1.)
+        parser.add_argument('--gradient_clip_norm', type=float, default=10)
+        parser.add_argument('--init_punish_factor', type=float, default=10.)
+        parser.add_argument('--pf_enlarge_interval', type=int, default=20000)
+        parser.add_argument('--pf_amplifier', type=float, default=1.)
+
+        # worker
+        parser.add_argument('--batch_size', type=int, default=512)
+        parser.add_argument('--worker_log_interval', type=int, default=5)
+        parser.add_argument('--explore_sigma', type=float, default=None)
+
+        # buffer
+        parser.add_argument('--max_buffer_size', type=int, default=50000)
+        parser.add_argument('--replay_starts', type=int, default=3000)
+        parser.add_argument('--replay_batch_size', type=int, default=256)
+        parser.add_argument('--replay_alpha', type=float, default=0.6)
+        parser.add_argument('--replay_beta', type=float, default=0.4)
+        parser.add_argument('--buffer_log_interval', type=int, default=40000)
+
+        # tester and evaluator
+        parser.add_argument('--num_eval_episode', type=int, default=2)
+        parser.add_argument('--eval_log_interval', type=int, default=1)
+        parser.add_argument('--fixed_steps', type=int, default=50)
+        parser.add_argument('--eval_render', type=bool, default=True)
+
+        # policy and model
+        parser.add_argument('--value_model_cls', type=str, default='MLP')
+        parser.add_argument('--policy_model_cls', type=str, default='MLP')
+        parser.add_argument('--policy_lr_schedule', type=list, default=[3e-5, 150000, 1e-5])
+        parser.add_argument('--value_lr_schedule', type=list, default=[8e-5, 150000, 1e-5])
+        parser.add_argument('--num_hidden_layers', type=int, default=2)
+        parser.add_argument('--num_hidden_units', type=int, default=256)
+        parser.add_argument('--hidden_activation', type=str, default='elu')
+        parser.add_argument('--deterministic_policy', default=True, action='store_true')
+        parser.add_argument('--policy_out_activation', type=str, default='tanh')
+        parser.add_argument('--action_range', type=float, default=None)
+
+        # preprocessor
+        parser.add_argument('--obs_preprocess_type', type=str, default='scale')
+        parser.add_argument('--obs_scale', type=list, default=None)
+        parser.add_argument('--reward_preprocess_type', type=str, default='scale')
+        parser.add_argument('--reward_scale', type=float, default=1.)
+        parser.add_argument('--reward_shift', type=float, default=0.)
+
+        # optimizer (PABAL)
+        parser.add_argument('--max_sampled_steps', type=int, default=0)
+        parser.add_argument('--max_iter', type=int, default=150000)
+        parser.add_argument('--num_workers', type=int, default=4)
+        parser.add_argument('--num_learners', type=int, default=30)
+        parser.add_argument('--num_buffers', type=int, default=4)
+        parser.add_argument('--max_weight_sync_delay', type=int, default=300)
+        parser.add_argument('--grads_queue_size', type=int, default=20)
+        parser.add_argument('--grads_max_reuse', type=int, default=20)
+        parser.add_argument('--eval_interval', type=int, default=5000)
+        parser.add_argument('--save_interval', type=int, default=5000)
+        parser.add_argument('--log_interval', type=int, default=100)
+
+        # Attention, added by YDJ
+        parser.add_argument('--num_attn_layers', type=int, default=3)
+        parser.add_argument('--con_dim', type=int, default=32)
+        parser.add_argument('--d_model', type=int, default=128)
+        parser.add_argument('--d_ff', type=int, default=256)
+        parser.add_argument('--num_heads', type=int, default=4)
+        parser.add_argument('--drop_rate', type=float, default=0.1)
+        parser.add_argument('--max_veh_num', type=int, default=10)
+        parser.add_argument('--backbone_cls', type=str, default='Attn')
+        parser.add_argument('--mu_lr_schedule', type=list, default=[8e-5, 150000, 1e-5])
+
+        return parser.parse_args()
+
+    args = built_AMPC_parser()
+
+    args.veh_dim = 4 # env.per_veh_info_dim
+    args.veh_num = 7 # env.veh_num
+    args.ego_dim = 6 # env.ego_info_dim
+    args.tracking_dim = 3 # env.per_tracking_info_dim
+
+    args.obs_dim = args.ego_dim + args.tracking_dim + args.veh_num *args.veh_dim # env.per_veh_info_dim
+    args.act_dim = 2
+    policy_with_mu = AttnPolicy4Lagrange(args)
+
+    g1 = tf.random.Generator.from_seed(1)
+    obs = g1.normal(shape=[3, 37])
+    nonpadding = tf.constant([[1,0,1,1,1,0,1], [1,0,0,0,1,1,1], [1,1,0,0,1,0,1]])
+
+    print(policy_with_mu.compute_action(obs, nonpadding))
 
 if __name__ == '__main__':
-    pass
+    test_attn_policy()
     # test_policy_with_Qs()

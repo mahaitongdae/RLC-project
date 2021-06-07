@@ -140,10 +140,10 @@ class EncoderLayer(tf.keras.layers.Layer):
 
     def call(self, x, training, mask):
         attn_output = self.mha(x, x, x, mask, training=training)  # (batch_size, input_seq_len, d_model)
-        out1 = self.layernorm1(x + attn_output)  # (batch_size, input_seq_len, d_model)
+        out1 = self.ln1(x + attn_output)  # (batch_size, input_seq_len, d_model)
 
         ffn_output = self.ffn(out1)  # (batch_size, input_seq_len, d_model)
         ffn_output = self.dropout(ffn_output, training=training)
-        out2 = self.layernorm2(out1 + ffn_output)  # (batch_size, input_seq_len, d_model)
+        out2 = self.ln2(out1 + ffn_output)  # (batch_size, input_seq_len, d_model)
 
         return out2

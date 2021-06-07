@@ -54,7 +54,7 @@ class AttnNet(Model):
                  max_len=10, **kwargs):
         super(AttnNet, self).__init__(name=kwargs['name'])
 
-        assert total_veh_dim / veh_num == 0
+        assert total_veh_dim % veh_num == 0
         self.ego_dim = ego_dim
         self.veh_num = veh_num
         self.veh_dim = total_veh_dim // veh_num
@@ -66,11 +66,11 @@ class AttnNet(Model):
         self.num_heads = num_heads
         self.dropout_rate = dropout
 
-        self.ego_embedding = Sequential([tf.keras.Input(shape=(self.ego_dim,)),
+        self.ego_embedding = Sequential([tf.keras.layers.InputLayer(input_shape=(self.ego_dim+self.tracking_dim,)),
                                          Dense(units=d_model,
                                                kernel_initializer=tf.keras.initializers.Orthogonal(np.sqrt(2.)),
                                                dtype=tf.float32)])
-        self.vehs_embedding = Sequential([tf.keras.Input(shape=(self.veh_dim,)),
+        self.vehs_embedding = Sequential([tf.keras.layers.InputLayer(input_shape=(self.veh_dim,)),
                                           Dense(units=d_model,
                                                 kernel_initializer=tf.keras.initializers.Orthogonal(np.sqrt(2.)),
                                                 dtype=tf.float32)])
@@ -84,15 +84,15 @@ class AttnNet(Model):
 
 
     def call(self, x_ego, x_vehs, padding_mask, mu_mask, training=True):
-        assert tf.shape(x_ego)[2] == self.ego_dim
-        assert tf.shape(x_vehs)[2] == self.veh_dim
-        assert tf.shape(x_vehs)[1] == self.veh_num
+        assert x_ego.shape[2] == self.ego_dim+self.tracking_dim
+        assert x_vehs.shape[2] == self.veh_dim
+        assert x_vehs.shape[1] == self.veh_num
 
-        seq_len = tf.shape(x_ego)[1] + tf.shape(x_vehs)[1]
+        seq_len = x_ego.shape[1] + x_vehs.shape[1]
         x1 = self.ego_embedding(x_ego)
         x2 = self.vehs_embedding(x_vehs)
         x = tf.concat([x1, x2], axis=1)
-        assert tf.shape(x)[1] == seq_len
+        assert x.shape[1] == seq_len
         x += self.pe[:, :seq_len, :]
 
         x = self.dropout(x, training=training)
@@ -100,7 +100,7 @@ class AttnNet(Model):
         for i in range(self.num_layers-1):
             x = self.attn_layers[i](x, training, padding_mask)
 
-        output_mask = tf.logical_and(padding_mask, mu_mask)
+        output_mask = tf.maximum(padding_mask, mu_mask)
         x, attn_weights = self.out_attn(x, x, attention_mask=output_mask,
                                         return_attention_scores=True, training=training)
 
