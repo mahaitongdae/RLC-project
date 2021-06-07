@@ -10,13 +10,16 @@
 import tensorflow as tf
 from tensorflow import Variable
 from tensorflow.keras import Model, Sequential
-from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dense, Dropout, MultiHeadAttention
+
+from model_utils import veh_positional_encoding, EncoderLayer
+
 import numpy as np
 
 tf.config.experimental.set_visible_devices([], 'GPU')
 tf.config.threading.set_inter_op_parallelism_threads(1)
 tf.config.threading.set_intra_op_parallelism_threads(1)
-from utils.shapechecker import ShapeChecker
+
 
 
 class MLPNet(Model):
@@ -44,41 +47,65 @@ class MLPNet(Model):
         x = self.outputs(x)
         return x
 
-class BahdanauAttention(tf.keras.layers.Layer):
-  def __init__(self, units):
-    super().__init__()
-    # For Eqn. (4), the  Bahdanau attention
-    self.W1 = tf.keras.layers.Dense(units, use_bias=False)
-    self.W2 = tf.keras.layers.Dense(units, use_bias=False)
 
-    self.attention = tf.keras.layers.AdditiveAttention()
+class AttnNet(Model):
+    def __init__(self, ego_dim, total_veh_dim, veh_num, tracking_dim,
+                 num_attn_layers, d_model, d_ff, num_heads, dropout,
+                 max_len=10, **kwargs):
+        super(AttnNet, self).__init__(name=kwargs['name'])
 
-  def call(self, query, value, mask):
-    shape_checker = ShapeChecker()
-    shape_checker(query, ('batch', 't', 'query_units'))
-    shape_checker(value, ('batch', 's', 'value_units'))
-    shape_checker(mask, ('batch', 's'))
+        assert total_veh_dim % veh_num == 0
+        self.ego_dim = ego_dim
+        self.veh_num = veh_num
+        self.veh_dim = total_veh_dim // veh_num
+        self.tracking_dim = tracking_dim
 
-    # From Eqn. (4), `W1@ht`.
-    w1_query = self.W1(query)
-    shape_checker(w1_query, ('batch', 't', 'attn_units'))
+        self.num_layers = num_attn_layers
+        self.d_model = d_model
+        self.d_ff = d_ff
+        self.num_heads = num_heads
+        self.dropout_rate = dropout
 
-    # From Eqn. (4), `W2@hs`.
-    w2_key = self.W2(value)
-    shape_checker(w2_key, ('batch', 's', 'attn_units'))
+        self.ego_embedding = Sequential([tf.keras.layers.InputLayer(input_shape=(self.ego_dim+self.tracking_dim,)),
+                                         Dense(units=d_model,
+                                               kernel_initializer=tf.keras.initializers.Orthogonal(np.sqrt(2.)),
+                                               dtype=tf.float32)])
+        self.vehs_embedding = Sequential([tf.keras.layers.InputLayer(input_shape=(self.veh_dim,)),
+                                          Dense(units=d_model,
+                                                kernel_initializer=tf.keras.initializers.Orthogonal(np.sqrt(2.)),
+                                                dtype=tf.float32)])
 
-    query_mask = tf.ones(tf.shape(query)[:-1], dtype=bool)
-    value_mask = mask
+        self.pe = veh_positional_encoding(max_len, d_model)
+        self.dropout = Dropout(self.dropout_rate)
 
-    context_vector, attention_weights = self.attention(
-        inputs = [w1_query, value, w2_key],
-        mask=[query_mask, value_mask],
-        return_attention_scores = True,
-    )
-    shape_checker(context_vector, ('batch', 't', 'value_units'))
-    shape_checker(attention_weights, ('batch', 't', 's'))
+        self.attn_layers = [EncoderLayer(d_model, num_heads, d_ff, dropout)
+                            for _ in range(self.num_layers-1)]
+        self.out_attn = MultiHeadAttention(num_heads, d_model, dropout=dropout)
 
-    return context_vector, attention_weights
+
+    def call(self, x_ego, x_vehs, padding_mask, mu_mask, training=True):
+        assert x_ego.shape[2] == self.ego_dim+self.tracking_dim
+        assert x_vehs.shape[2] == self.veh_dim
+        assert x_vehs.shape[1] == self.veh_num
+
+        seq_len = x_ego.shape[1] + x_vehs.shape[1]
+        x1 = self.ego_embedding(x_ego)
+        x2 = self.vehs_embedding(x_vehs)
+        x = tf.concat([x1, x2], axis=1)
+        assert x.shape[1] == seq_len
+        x += self.pe[:, :seq_len, :]
+
+        x = self.dropout(x, training=training)
+
+        for i in range(self.num_layers-1):
+            x = self.attn_layers[i](x, training, padding_mask)
+
+        output_mask = tf.maximum(padding_mask, mu_mask)
+        x, attn_weights = self.out_attn(x, x, attention_mask=output_mask,
+                                        return_attention_scores=True, training=training)
+
+        return x, attn_weights
+
 
 def test_attrib():
     a = Variable(0, name='d')
@@ -127,7 +154,8 @@ def test_memory2():
                                  tf.keras.layers.Dense(10, activation='relu')])
     time.sleep(10000)
 
-
+def test_attn():
+    pass
 
 if __name__ == '__main__':
-    test_memory2()
+    test_attn()
