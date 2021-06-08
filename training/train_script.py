@@ -46,12 +46,12 @@ def built_AMPC_parser():
     mode = parser.parse_args().mode
 
     if mode == 'testing':
-        test_dir = './results/toyota_realcar/experiment-2020-12-28-22-54-48'
+        test_dir = '/home/mahaitong/PycharmProjects/RLC-project/training/results/integrate_3lane/experiment-2021-06-08-01-15-08'
         params = json.loads(open(test_dir + '/config.json').read())
         time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         test_log_dir = params['log_dir'] + '/tester/test-{}'.format(time_now)
         params.update(dict(test_dir=test_dir,
-                           test_iter_list=[65000],
+                           test_iter_list=[150000],
                            test_log_dir=test_log_dir,
                            num_eval_episode=5,
                            eval_log_interval=1,
@@ -107,8 +107,8 @@ def built_AMPC_parser():
     # policy and model
     parser.add_argument('--value_model_cls', type=str, default='MLP')
     parser.add_argument('--policy_model_cls', type=str, default='MLP')
-    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-5, 150000, 1e-5])
-    parser.add_argument('--value_lr_schedule', type=list, default=[8e-5, 150000, 1e-5])
+    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-5, 500000, 1e-5])
+    parser.add_argument('--value_lr_schedule', type=list, default=[8e-5, 500000, 1e-5])
     parser.add_argument('--num_hidden_layers', type=int, default=2)
     parser.add_argument('--num_hidden_units', type=int, default=256)
     parser.add_argument('--hidden_activation', type=str, default='elu')
@@ -125,9 +125,9 @@ def built_AMPC_parser():
 
     # optimizer (PABAL)
     parser.add_argument('--max_sampled_steps', type=int, default=0)
-    parser.add_argument('--max_iter', type=int, default=150000)
+    parser.add_argument('--max_iter', type=int, default=500000)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_learners', type=int, default=10)
+    parser.add_argument('--num_learners', type=int, default=20)
     parser.add_argument('--num_buffers', type=int, default=4)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)
@@ -155,7 +155,8 @@ def built_AMPC_parser():
     parser.add_argument('--drop_rate', type=float, default=0.1)
     parser.add_argument('--max_veh_num', type=int, default=10)
     parser.add_argument('--backbone_cls', type=str, default='Attn')
-    parser.add_argument('--mu_lr_schedule', type=list, default=[8e-5, 150000, 1e-5])
+    parser.add_argument('--mu_lr_schedule', type=list, default=[3e-5, 150000, 1e-5])
+    parser.add_argument('--mu_update_interval', type=int, default=6)
 
     return parser.parse_args()
 

@@ -70,8 +70,8 @@ class Evaluator(object):
         if render: self.env.render()
         if steps is not None:
             for _ in range(steps):
-                processed_obs = self.preprocessor.tf_process_obses(obs)
-                action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
+                processed_obs = self.preprocessor.tf_process_obses(obs[:self.args.obs_dim])
+                action, _ = self.policy_with_value.compute_action(processed_obs[np.newaxis, :], obs[self.args.obs_dim:][np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
                 reward_info_dict_list.append(info['reward_info'])
                 if render: self.env.render()
@@ -79,7 +79,7 @@ class Evaluator(object):
         else:
             while not done:
                 processed_obs = self.preprocessor.tf_process_obses(obs)
-                action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
+                action = self.policy_with_value.compute_action(processed_obs[np.newaxis, :], obs[self.args.obs_dim:][np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
                 reward_info_dict_list.append(info['reward_info'])
                 if render: self.env.render()

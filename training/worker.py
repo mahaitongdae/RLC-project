@@ -90,7 +90,7 @@ class OffPolicyWorker(object):
             processed_obs = self.preprocessor.process_obs(self.obs[:self.args.obs_dim])
             padding_index = self.obs[self.args.obs_dim:]
             judge_is_nan([processed_obs])
-            action, logp = self.policy_with_value.compute_action(processed_obs[np.newaxis, :])
+            action, logp = self.policy_with_value.compute_action(processed_obs[np.newaxis, :], padding_index[np.newaxis, :])
             if self.explore_sigma is not None:
                 action += np.random.normal(0, self.explore_sigma, np.shape(action))
             try:

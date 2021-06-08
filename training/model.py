@@ -81,7 +81,8 @@ class AttnNet(Model):
         self.attn_layers = [EncoderLayer(d_model, num_heads, d_ff, dropout)
                             for _ in range(self.num_layers-1)]
         self.out_attn = MultiHeadAttention(num_heads, d_model, dropout=dropout)
-        self.build(input_shape=[(None, ego_dim), (None, total_veh_dim), (None, veh_num), (None, 8, 8)]) # todo: variant length
+        self.build(input_shape=[(None, 1, ego_dim+tracking_dim), (None, veh_num, self.veh_dim),
+                                (None, veh_num+1, veh_num+1), (None, veh_num+1, veh_num+1)]) # todo: variant length
 
 
     def call(self, input, **kwargs):

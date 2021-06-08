@@ -59,13 +59,13 @@ class LMAMPCLearnerv3(object):
         return self.info_for_buffer
 
     def get_batch_data(self, batch_data, rb, indexes):
-        self.batch_data = {'batch_obs': batch_data[0][:self.args.obs_dim].astype(np.float32),
+        self.batch_data = {'batch_obs': batch_data[0][:, :self.args.obs_dim].astype(np.float32),
                            'batch_actions': batch_data[1].astype(np.float32),
                            'batch_rewards': batch_data[2].astype(np.float32),
                            'batch_obs_tp1': batch_data[3].astype(np.float32),
                            'batch_dones': batch_data[4].astype(np.float32),
                            'batch_ref_index': batch_data[5].astype(np.int32),
-                           'batch_padding_index': batch_data[0][self.args.obs_dim:].astype(np.float32)
+                           'batch_padding_index': batch_data[0][:, self.args.obs_dim:].astype(np.float32)
                            }
 
     def get_weights(self):
@@ -85,6 +85,7 @@ class LMAMPCLearnerv3(object):
         return pf
 
     def model_rollout_for_update(self, start_obses, ite, mb_ref_index, mb_padding_index):
+
         start_obses = self.tf.tile(start_obses, [self.M, 1])
         self.model.reset(start_obses, mb_ref_index)
         rewards_sum = self.tf.zeros((start_obses.shape[0],))
@@ -110,11 +111,12 @@ class LMAMPCLearnerv3(object):
         # pg loss
         obj_loss = -self.tf.reduce_mean(rewards_sum)
         processed_start_obses = self.preprocessor.tf_process_obses(start_obses)
-        mu = self.policy_with_value.compute_mu(processed_start_obses, mb_padding_index)
-        punish_terms = self.tf.reduce_mean(self.tf.multiply(self.tf.stop_gradient(mu), constraints_violation_sum))
+        _, mu = self.policy_with_value.compute_mu(processed_start_obses, mb_padding_index)
+        mu = self.tf.reshape(mu,[self.args.replay_batch_size, -1])
+        punish_terms = self.tf.reduce_mean(self.tf.multiply(self.tf.stop_gradient(mu), constraints_violation_sum[:,:28])) # todo
         pg_loss = obj_loss + punish_terms
         cs_loss = -self.tf.reduce_mean(
-            self.tf.multiply(mu, self.tf.stop_gradient(constraints_violation_sum)))  # complementary slackness loss
+            self.tf.multiply(mu, self.tf.stop_gradient(constraints_violation_sum[:,:28])))  # complementary slackness loss
         constraints = self.tf.reduce_mean(constraints_violation_sum)
         veh2veh4real = self.tf.reduce_mean(veh2veh4real_sum)
         veh2road4real = self.tf.reduce_mean(veh2road4real_sum)
