@@ -110,7 +110,7 @@ def built_AMPC_parser():
     parser.add_argument('--policy_lr_schedule', type=list, default=[3e-5, 500000, 1e-5])
     parser.add_argument('--value_lr_schedule', type=list, default=[8e-5, 500000, 1e-5])
     parser.add_argument('--num_hidden_layers', type=int, default=2)
-    parser.add_argument('--num_hidden_units', type=int, default=256)
+    parser.add_argument('--num_hidden_units', type=int, default=128)
     parser.add_argument('--hidden_activation', type=str, default='elu')
     parser.add_argument('--deterministic_policy', default=True, action='store_true')
     parser.add_argument('--policy_out_activation', type=str, default='tanh')
@@ -147,10 +147,10 @@ def built_AMPC_parser():
     parser.add_argument('--ppc_load_dir', type=str, default=None)
 
     # Attention, added by YDJ
-    parser.add_argument('--num_attn_layers', type=int, default=3)
+    parser.add_argument('--num_attn_layers', type=int, default=2)
     parser.add_argument('--con_dim', type=int, default=32)
     parser.add_argument('--d_model', type=int, default=128)
-    parser.add_argument('--d_ff', type=int, default=256)
+    parser.add_argument('--d_ff', type=int, default=128)
     parser.add_argument('--num_heads', type=int, default=4)
     parser.add_argument('--drop_rate', type=float, default=0.1)
     parser.add_argument('--max_veh_num', type=int, default=10)

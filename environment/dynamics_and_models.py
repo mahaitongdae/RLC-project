@@ -228,7 +228,7 @@ class EnvironmentModel(object):  # all tensors
                             tf.square(ego_point[0] - veh_point[0]) + tf.square(ego_point[1] - veh_point[1])) + 2.5
                         veh2veh4real += tf.where(veh2veh_dist > 1, tf.square(veh2veh_dist - 1), tf.zeros_like(veh_infos[:, 0]))
                         # update veh2veh dist last
-                        constraints_list = constraints_list.write(constraint_index, veh2veh_dist)
+                        constraints_list = constraints_list.write(constraint_index, 5 * veh2veh_dist)
                         # print(constraint_index)
                         # tf.print(veh2veh_dist)
                         # tf.print(constraint_index)
