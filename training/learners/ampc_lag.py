@@ -11,10 +11,10 @@ import logging
 
 import gym
 import numpy as np
-from gym.envs.user_defined.toyota_lag.dynamics_and_models import EnvironmentModel
+from gym.envs.user_defined.rlc.dynamics_and_models import EnvironmentModel
 
-from preprocessor import Preprocessor
-from utils.misc import TimerStat, args2envkwargs
+from training.preprocessor import Preprocessor
+from training.utils.misc import TimerStat, args2envkwargs
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -59,12 +59,13 @@ class LMAMPCLearnerv3(object):
         return self.info_for_buffer
 
     def get_batch_data(self, batch_data, rb, indexes):
-        self.batch_data = {'batch_obs': batch_data[0].astype(np.float32),
+        self.batch_data = {'batch_obs': batch_data[0][:, :self.args.obs_dim].astype(np.float32),
                            'batch_actions': batch_data[1].astype(np.float32),
                            'batch_rewards': batch_data[2].astype(np.float32),
                            'batch_obs_tp1': batch_data[3].astype(np.float32),
                            'batch_dones': batch_data[4].astype(np.float32),
-                           'batch_ref_index': batch_data[5].astype(np.int32)
+                           'batch_ref_index': batch_data[5].astype(np.int32),
+                           'batch_padding_index': batch_data[0][:, self.args.obs_dim:].astype(np.float32)
                            }
 
     def get_weights(self):
@@ -83,7 +84,8 @@ class LMAMPCLearnerv3(object):
         pf = init_pf * self.tf.pow(amplifier, self.tf.cast(ite//interval, self.tf.float32))
         return pf
 
-    def model_rollout_for_update(self, start_obses, ite, mb_ref_index):
+    def model_rollout_for_update(self, start_obses, ite, mb_ref_index, mb_padding_index):
+
         start_obses = self.tf.tile(start_obses, [self.M, 1])
         self.model.reset(start_obses, mb_ref_index)
         rewards_sum = self.tf.zeros((start_obses.shape[0],))
@@ -94,7 +96,7 @@ class LMAMPCLearnerv3(object):
         obses = start_obses
         for step in range(self.num_rollout_list_for_policy_update[0]):
             processed_obses = self.preprocessor.tf_process_obses(obses)
-            actions, _ = self.policy_with_value.compute_action(processed_obses)
+            actions, _ = self.policy_with_value.compute_action(processed_obses, mb_padding_index)
             obses, rewards, constraints, real_punish_term, veh2veh4real, veh2road4real = self.model.rollout_out(actions)
             constraints_clip = self.tf.clip_by_value(constraints, CONSTRAINTS_CLIP_MINUS, 100)
             rewards_sum += self.preprocessor.tf_process_rewards(rewards)
@@ -109,11 +111,12 @@ class LMAMPCLearnerv3(object):
         # pg loss
         obj_loss = -self.tf.reduce_mean(rewards_sum)
         processed_start_obses = self.preprocessor.tf_process_obses(start_obses)
-        mu = self.policy_with_value.compute_mu(processed_start_obses)
-        punish_terms = self.tf.reduce_mean(self.tf.multiply(self.tf.stop_gradient(mu), constraints_violation_sum))
+        _, mu = self.policy_with_value.compute_mu(processed_start_obses, mb_padding_index)
+        mu = self.tf.reshape(mu,[self.args.replay_batch_size, -1])
+        punish_terms = self.tf.reduce_mean(self.tf.multiply(self.tf.stop_gradient(mu), constraints_violation_sum[:,:28])) # todo
         pg_loss = obj_loss + punish_terms
         cs_loss = -self.tf.reduce_mean(
-            self.tf.multiply(mu, self.tf.stop_gradient(constraints_violation_sum)))  # complementary slackness loss
+            self.tf.multiply(mu, self.tf.stop_gradient(constraints_violation_sum[:,:28])))  # complementary slackness loss
         constraints = self.tf.reduce_mean(constraints_violation_sum)
         veh2veh4real = self.tf.reduce_mean(veh2veh4real_sum)
         veh2road4real = self.tf.reduce_mean(veh2road4real_sum)
@@ -122,15 +125,15 @@ class LMAMPCLearnerv3(object):
                constraints, veh2veh4real, veh2road4real
 
     @tf.function
-    def forward_and_backward(self, mb_obs, ite, mb_ref_index):
+    def forward_and_backward(self, mb_obs, ite, mb_ref_index, mb_padding_index):
         with self.tf.GradientTape(persistent=True) as tape:
             obj_loss, punish_terms, cs_loss, pg_loss, \
             constraints, veh2veh4real, veh2road4real\
-                = self.model_rollout_for_update(mb_obs, ite, mb_ref_index)
+                = self.model_rollout_for_update(mb_obs, ite, mb_ref_index, mb_padding_index)
 
         with self.tf.name_scope('policy_gradient') as scope:
             pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)
-            mu_grad = tape.gradient(cs_loss, self.policy_with_value.mu.trainable_weights) #TODO: why use -pg_loss here lead to no grad?
+            mu_grad = tape.gradient(cs_loss, self.policy_with_value.backbone.trainable_weights) #TODO: why use -pg_loss here lead to no grad?
 
         return pg_grad, mu_grad, obj_loss, punish_terms, cs_loss, pg_loss,\
                constraints, veh2veh4real, veh2road4real
@@ -148,11 +151,12 @@ class LMAMPCLearnerv3(object):
         mb_obs = self.tf.constant(self.batch_data['batch_obs'])
         iteration = self.tf.convert_to_tensor(iteration, self.tf.int32)
         mb_ref_index = self.tf.constant(self.batch_data['batch_ref_index'], self.tf.int32)
+        mb_padding_index = self.tf.constant(self.batch_data['batch_padding_index'], self.tf.float32)
 
         with self.grad_timer:
             pg_grad, mu_grad, obj_loss, punish_terms, cs_loss, pg_loss, \
             constraints, veh2veh4real, veh2road4real =\
-                self.forward_and_backward(mb_obs, iteration, mb_ref_index)
+                self.forward_and_backward(mb_obs, iteration, mb_ref_index, mb_padding_index)
 
             obj_grad, pg_grad_norm = self.tf.clip_by_global_norm(pg_grad, self.args.gradient_clip_norm)
             mu_grad, mu_grad_norm = self.tf.clip_by_global_norm(mu_grad, self.args.gradient_clip_norm)

@@ -87,9 +87,10 @@ class OffPolicyWorker(object):
     def sample(self):
         batch_data = []
         for _ in range(self.batch_size):
-            processed_obs = self.preprocessor.process_obs(self.obs)
+            processed_obs = self.preprocessor.process_obs(self.obs[:self.args.obs_dim])
+            padding_index = self.obs[self.args.obs_dim:]
             judge_is_nan([processed_obs])
-            action, logp = self.policy_with_value.compute_action(processed_obs[np.newaxis, :])
+            action, logp = self.policy_with_value.compute_action(processed_obs[np.newaxis, :], padding_index[np.newaxis, :])
             if self.explore_sigma is not None:
                 action += np.random.normal(0, self.explore_sigma, np.shape(action))
             try:
@@ -98,7 +99,7 @@ class OffPolicyWorker(object):
                 print('processed_obs', processed_obs)
                 print('preprocessor_params', self.preprocessor.get_params())
                 print('policy_weights', self.policy_with_value.policy.trainable_weights)
-                action, logp = self.policy_with_value.compute_action(processed_obs[np.newaxis, :])
+                action, logp = self.policy_with_value.compute_action(processed_obs[np.newaxis, :], padding_index)
                 judge_is_nan([action])
                 raise ValueError
             obs_tp1, reward, self.done, info = self.env.step(action.numpy()[0])

@@ -81,9 +81,13 @@ class AttnNet(Model):
         self.attn_layers = [EncoderLayer(d_model, num_heads, d_ff, dropout)
                             for _ in range(self.num_layers-1)]
         self.out_attn = MultiHeadAttention(num_heads, d_model, dropout=dropout)
+        self.build(input_shape=[(None, 1, ego_dim+tracking_dim), (None, veh_num, self.veh_dim),
+                                (None, veh_num+1, veh_num+1), (None, veh_num+1, veh_num+1)]) # todo: variant length
 
 
-    def call(self, x_ego, x_vehs, padding_mask, mu_mask, training=True):
+    def call(self, input, **kwargs):
+        training = kwargs.get('training')
+        x_ego, x_vehs, padding_mask, mu_mask = input[0], input[1], input[2], input[3]
         assert x_ego.shape[2] == self.ego_dim+self.tracking_dim
         assert x_vehs.shape[2] == self.veh_dim
         assert x_vehs.shape[1] == self.veh_num
