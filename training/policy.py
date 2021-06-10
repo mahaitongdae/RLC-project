@@ -74,6 +74,11 @@ class AttnPolicy4Lagrange(tf.Module):
         policy_lr_schedule = PolynomialDecay(*self.args.policy_lr_schedule)
         self.policy_optimizer = self.tf.keras.optimizers.Adam(policy_lr_schedule, name='adam_opt')
 
+        self.value = policy_model_cls(d_model, n_hiddens, n_units, hidden_activation, 1, name='value',
+                                       output_activation='softplus')
+        value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
+        self.value_optimizer = self.tf.keras.optimizers.Adam(value_lr_schedule, name='adam_opt')
+
         # self.value = Sequential([tf.keras.Input(shape=(d_model,)),
         #                          Dense(1, activation='linear',
         #                                kernel_initializer=tf.keras.initializers.Orthogonal(1.),
@@ -82,8 +87,8 @@ class AttnPolicy4Lagrange(tf.Module):
         # value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
         # self.value_optimizer = self.tf.keras.optimizers.Adam(value_lr_schedule, name='v_adam_opt')
 
-        self.models = (self.backbone, self.policy)
-        self.optimizers = (self.mu_optimizer, self.policy_optimizer)
+        self.models = (self.backbone, self.policy, self.value)
+        self.optimizers = (self.mu_optimizer, self.policy_optimizer, self.value_optimizer)
 
     def save_weights(self, save_dir, iteration):
         model_pairs = [(model.name, model) for model in self.models]
@@ -107,8 +112,11 @@ class AttnPolicy4Lagrange(tf.Module):
     @tf.function
     def apply_gradients(self, iteration, grads):
         policy_len = len(self.policy.trainable_weights)
-        policy_grad, mu_grad = grads[:policy_len], grads[policy_len:]
+        mu_len = len(self.backbone.trainable_weights)
+        policy_grad, mu_grad, value_grad = grads[:policy_len], grads[policy_len:policy_len+mu_len],\
+                                           grads[policy_len+mu_len:]
         self.policy_optimizer.apply_gradients(zip(policy_grad, self.policy.trainable_weights))
+        self.value_optimizer.apply_gradients(zip(value_grad, self.value.trainable_weights))
         if iteration % self.args.mu_update_interval == 0:
             self.mu_optimizer.apply_gradients(zip(mu_grad, self.backbone.trainable_weights))
 
@@ -181,6 +189,14 @@ class AttnPolicy4Lagrange(tf.Module):
                 actions = act_dist.sample()
                 logps = act_dist.log_prob(actions)
                 return actions, logps
+
+    @tf.function
+    def compute_value(self, obs, nonpadding_ind, training=True):
+        hidden, _ = self.compute_mu(obs, nonpadding_ind, training)
+        hidden = tf.stop_gradient(hidden)
+        with self.tf.name_scope('compute_value') as scope:
+            value = self.value(hidden)
+        return value
 
     # @tf.function
     # def compute_v(self, hidden):

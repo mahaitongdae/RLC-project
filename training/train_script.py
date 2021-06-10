@@ -107,8 +107,8 @@ def built_AMPC_parser():
     # policy and model
     parser.add_argument('--value_model_cls', type=str, default='MLP')
     parser.add_argument('--policy_model_cls', type=str, default='MLP')
-    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-5, 500000, 1e-5])
-    parser.add_argument('--value_lr_schedule', type=list, default=[8e-5, 500000, 1e-5])
+    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-5, 500000, 1e-6])
+    parser.add_argument('--value_lr_schedule', type=list, default=[8e-5, 500000, 1e-6])
     parser.add_argument('--num_hidden_layers', type=int, default=2)
     parser.add_argument('--num_hidden_units', type=int, default=128)
     parser.add_argument('--hidden_activation', type=str, default='elu')
@@ -120,7 +120,7 @@ def built_AMPC_parser():
     parser.add_argument('--obs_preprocess_type', type=str, default='scale')
     parser.add_argument('--obs_scale', type=list, default=None)
     parser.add_argument('--reward_preprocess_type', type=str, default='scale')
-    parser.add_argument('--reward_scale', type=float, default=1.)
+    parser.add_argument('--reward_scale', type=float, default=0.1)
     parser.add_argument('--reward_shift', type=float, default=0.)
 
     # optimizer (PABAL)
@@ -155,8 +155,8 @@ def built_AMPC_parser():
     parser.add_argument('--drop_rate', type=float, default=0.1)
     parser.add_argument('--max_veh_num', type=int, default=10)
     parser.add_argument('--backbone_cls', type=str, default='Attn')
-    parser.add_argument('--mu_lr_schedule', type=list, default=[3e-5, 150000, 1e-5])
-    parser.add_argument('--mu_update_interval', type=int, default=6)
+    parser.add_argument('--mu_lr_schedule', type=list, default=[3e-5, 150000, 1e-6])
+    parser.add_argument('--mu_update_interval', type=int, default=4)
 
     return parser.parse_args()
 

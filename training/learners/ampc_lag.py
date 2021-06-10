@@ -112,6 +112,8 @@ class LMAMPCLearnerv3(object):
         obj_loss = -self.tf.reduce_mean(rewards_sum)
         processed_start_obses = self.preprocessor.tf_process_obses(start_obses)
         _, mu = self.policy_with_value.compute_mu(processed_start_obses, mb_padding_index)
+        value = self.policy_with_value.compute_value(processed_start_obses, mb_padding_index)
+        value_loss = self.tf.reduce_mean(self.tf.square(- rewards_sum - value))
         mu = self.tf.reshape(mu,[self.args.replay_batch_size, -1])
         punish_terms = self.tf.reduce_mean(self.tf.multiply(self.tf.stop_gradient(mu), constraints_violation_sum[:,:28])) # todo
         pg_loss = obj_loss + punish_terms
@@ -121,21 +123,24 @@ class LMAMPCLearnerv3(object):
         veh2veh4real = self.tf.reduce_mean(veh2veh4real_sum)
         veh2road4real = self.tf.reduce_mean(veh2road4real_sum)
 
-        return obj_loss, punish_terms, cs_loss, pg_loss,\
+        return obj_loss, punish_terms, cs_loss, pg_loss, value_loss, \
                constraints, veh2veh4real, veh2road4real
 
     @tf.function
     def forward_and_backward(self, mb_obs, ite, mb_ref_index, mb_padding_index):
         with self.tf.GradientTape(persistent=True) as tape:
-            obj_loss, punish_terms, cs_loss, pg_loss, \
+            obj_loss, punish_terms, cs_loss, pg_loss, value_loss, \
             constraints, veh2veh4real, veh2road4real\
                 = self.model_rollout_for_update(mb_obs, ite, mb_ref_index, mb_padding_index)
 
         with self.tf.name_scope('policy_gradient') as scope:
             pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)
+        with self.tf.name_scope('mu_gradient') as scope:
             mu_grad = tape.gradient(cs_loss, self.policy_with_value.backbone.trainable_weights) #TODO: why use -pg_loss here lead to no grad?
+        with self.tf.name_scope('value_gradient') as scope:
+            value_grad = tape.gradient(value_loss, self.policy_with_value.value.trainable_weights)
 
-        return pg_grad, mu_grad, obj_loss, punish_terms, cs_loss, pg_loss,\
+        return pg_grad, mu_grad, value_grad, obj_loss, punish_terms, cs_loss, pg_loss, value_loss, \
                constraints, veh2veh4real, veh2road4real
 
     def export_graph(self, writer):
@@ -154,12 +159,13 @@ class LMAMPCLearnerv3(object):
         mb_padding_index = self.tf.constant(self.batch_data['batch_padding_index'], self.tf.float32)
 
         with self.grad_timer:
-            pg_grad, mu_grad, obj_loss, punish_terms, cs_loss, pg_loss, \
+            pg_grad, mu_grad, value_grad, obj_loss, punish_terms, cs_loss, pg_loss, value_loss, \
             constraints, veh2veh4real, veh2road4real =\
                 self.forward_and_backward(mb_obs, iteration, mb_ref_index, mb_padding_index)
 
             obj_grad, pg_grad_norm = self.tf.clip_by_global_norm(pg_grad, self.args.gradient_clip_norm)
             mu_grad, mu_grad_norm = self.tf.clip_by_global_norm(mu_grad, self.args.gradient_clip_norm)
+            value_grad, value_grad_norm = self.tf.clip_by_global_norm(value_grad, self.args.gradient_clip_norm)
 
         self.stats.update(dict(
             iteration=iteration,
@@ -171,11 +177,13 @@ class LMAMPCLearnerv3(object):
             veh2road4real=veh2road4real.numpy(),
             cs_loss=cs_loss.numpy(),
             pg_loss=pg_loss.numpy(),
+            value_loss=value_loss.numpy(),
             pg_grads_norm=pg_grad_norm.numpy(),
-            mu_grad_norm=mu_grad_norm.numpy()
+            mu_grad_norm=mu_grad_norm.numpy(),
+            value_grad_norm=value_grad_norm.numpy()
         ))
 
-        grads = obj_grad  + mu_grad
+        grads = obj_grad + mu_grad + value_grad
 
         return list(map(lambda x: x.numpy(), grads))
 
