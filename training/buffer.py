@@ -175,6 +175,67 @@ class ReplayBufferPro(ReplayBuffer):
                    np.array(obses_tp1), np.array(dones), np.array(ref_indexs)
 
 
+class DistendReplyBuffer(ReplayBuffer):
+    # this class distend the size of sampling
+    # sample the past 4 moments + current moment + the future 24 moments
+    def _encode_sample(self, idxes):
+        obses_t, actions, rewards, obses_tp1, dones, ref_indexs = [], [], [], [], [], []
+        for i in idxes:
+            data = self._storage[i]
+            obs_t, action, reward, obs_tp1, done, ref_index = data
+            obses_t.append(np.array(obs_t, copy=False))
+            actions.append(np.array(action, copy=False))
+            rewards.append(reward)
+            obses_tp1.append(np.array(obs_tp1, copy=False))
+            dones.append(done)
+            ref_indexs.append(ref_index)
+        return np.array(obses_t), np.array(actions), np.array(rewards), \
+               np.array(obses_tp1), np.array(dones), np.array(ref_indexs)
+
+
+    def sample_idxes(self, batch_size):
+        # make sure to select the idxes which have 29 continuous steps s
+        idxes = [random.randint(4, len(self._storage) - 1) for _ in range(batch_size)]
+        for ith, idx in enumerate(idxes):
+            judgement = self.judge(idx)
+            while judgement == False:
+                new_index = random.randint(4, len(self._storage) - 1)
+                judgement = self.judge(new_index)
+            if new_index != idx:
+                idxes[ith] = new_index
+        return np.array(idxes, dtype=np.int32)
+
+    def judge(self, idx):
+        continuity_judge = True
+        current_ref = self._storage[idx][5]
+        for i in range(28):
+            if (self._storage[idx-4+i][4] == True) or (self._storage[idx-4+i][5] != current_ref):
+                continuity_judge = False
+            return continuity_judge
+
+    def sample_with_idxes(self, idxes):
+        return list(self._encode_sample(idxes)) + [idxes,]
+
+    def sample(self, batch_size):
+        idxes = self.sample_idxes(batch_size)
+        return self.sample_with_idxes(idxes)
+
+    def _encode_sample(self, idxes):
+        obses_t, actions, rewards, obses_tp1, dones, ref_indexs = [], [], [], [], [], []
+        for idx in idxes:
+            for i in range(29):
+                data = self._storage[idx-4+i]
+                obs_t, action, reward, obs_tp1, done, ref_index = data
+                obses_t.append(np.array(obs_t, copy=False))
+                actions.append(np.array(action, copy=False))
+                rewards.append(reward)
+                obses_tp1.append(np.array(obs_tp1, copy=False))
+                dones.append(done)
+                ref_indexs.append(ref_index)
+        return np.array(obses_t), np.array(actions), np.array(rewards), \
+               np.array(obses_tp1), np.array(dones), np.array(ref_indexs)
+
+
 
 
 
