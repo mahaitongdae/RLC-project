@@ -178,20 +178,6 @@ class ReplayBufferPro(ReplayBuffer):
 class DistendReplyBuffer(ReplayBuffer):
     # this class distend the size of sampling
     # sample the past 4 moments + current moment + the future 24 moments
-    def _encode_sample(self, idxes):
-        obses_t, actions, rewards, obses_tp1, dones, ref_indexs = [], [], [], [], [], []
-        for i in idxes:
-            data = self._storage[i]
-            obs_t, action, reward, obs_tp1, done, ref_index = data
-            obses_t.append(np.array(obs_t, copy=False))
-            actions.append(np.array(action, copy=False))
-            rewards.append(reward)
-            obses_tp1.append(np.array(obs_tp1, copy=False))
-            dones.append(done)
-            ref_indexs.append(ref_index)
-        return np.array(obses_t), np.array(actions), np.array(rewards), \
-               np.array(obses_tp1), np.array(dones), np.array(ref_indexs)
-
 
     def sample_idxes(self, batch_size):
         # make sure to select the idxes which have 29 continuous steps s
@@ -234,10 +220,3 @@ class DistendReplyBuffer(ReplayBuffer):
                 ref_indexs.append(ref_index)
         return np.array(obses_t), np.array(actions), np.array(rewards), \
                np.array(obses_tp1), np.array(dones), np.array(ref_indexs)
-
-
-
-
-
-
-
