@@ -116,12 +116,12 @@ class EnvironmentModel(object):  # all tensors
         self.obses = obses
         self.ref_path = trajectory
 
-    def rollout_out(self, actions):  # obses and actions are tensors, think of actions are in range [-1, 1]
+    def rollout_out(self, actions, plc):  # obses and actions are tensors, think of actions are in range [-1, 1]
         with tf.name_scope('model_step') as scope:
             self.actions = self._action_transformation_for_end2end(actions)
             rewards, punish_term_for_training, real_punish_term, veh2veh4real, veh2road4real, _ \
                 = self.compute_rewards(self.obses, self.actions)
-            self.obses = self.compute_next_obses(self.obses, self.actions)
+            self.obses = self.compute_next_obses(self.obses, self.actions, plc)
             # self.reward_info.update({'final_rew': rewards.numpy()[0]})
 
         return self.obses, rewards, punish_term_for_training, real_punish_term, veh2veh4real, veh2road4real
@@ -268,7 +268,7 @@ class EnvironmentModel(object):  # all tensors
 
             return rewards, punish_term_for_training, real_punish_term, veh2veh4real, veh2road4real, reward_dict
 
-    def compute_next_obses(self, obses, actions):
+    def compute_next_obses(self, obses, actions, plc):
         # obses = self.convert_vehs_to_abso(obses)
         ego_infos, tracking_infos, veh_infos = obses[:, :self.ego_info_dim],\
                                                obses[:, self.ego_info_dim:
@@ -301,7 +301,7 @@ class EnvironmentModel(object):  # all tensors
                 next_tracking_infos = tf.where(ref_indexes == ref_idx, tracking_info_4_this_ref_idx,
                                                next_tracking_infos)
 
-        next_veh_infos = self.veh_predict(veh_infos)
+        next_veh_infos = self.veh_predict(ego_infos, veh_infos, plc)
         next_obses = tf.concat([next_ego_infos, next_tracking_infos, next_veh_infos], 1)
         # next_obses = self.convert_vehs_to_rela(next_obses)
         return next_obses
@@ -340,44 +340,46 @@ class EnvironmentModel(object):  # all tensors
         ego_next_infos = tf.stack([v_xs, v_ys, rs, xs, ys, phis], axis=1)
         return ego_next_infos
 
-    def veh_predict(self, veh_infos):
+    def veh_predict(self, ego_infos, veh_infos, plc):
         veh_mode_list = VEHICLE_MODE_LIST[self.task]
         predictions_to_be_concat = []
 
         for vehs_index in range(len(veh_mode_list)):
             predictions_to_be_concat.append(self.predict_for_a_mode(
-                veh_infos[:, vehs_index * self.per_veh_info_dim:(vehs_index + 1) * self.per_veh_info_dim],
-                veh_mode_list[vehs_index]))
+               ego_infos, veh_infos[:, vehs_index * self.per_veh_info_dim:(vehs_index + 1) * self.per_veh_info_dim],
+                veh_mode_list[vehs_index], plc))
         pred = tf.stop_gradient(tf.concat(predictions_to_be_concat, 1))
         return pred
 
-    def predict_for_a_mode(self, vehs, mode):
+    def predict_for_a_mode(self, ego_infos, vehs, mode, plc):
+        # 注意单位好想有个单位转换的问题
         veh_xs, veh_ys, veh_vs, veh_phis = vehs[:, 0], vehs[:, 1], vehs[:, 2], vehs[:, 3]
-        veh_phis_rad = veh_phis * np.pi / 180.
-
-        middle_cond = logical_and(logical_and(veh_xs > -CROSSROAD_SIZE/2, veh_xs < CROSSROAD_SIZE/2),
-                                  logical_and(veh_ys > -CROSSROAD_SIZE/2, veh_ys < CROSSROAD_SIZE/2))
-        zeros = tf.zeros_like(veh_xs)
-
-        veh_xs_delta = veh_vs / self.base_frequency * tf.cos(veh_phis_rad)
-        veh_ys_delta = veh_vs / self.base_frequency * tf.sin(veh_phis_rad)
-
-        if mode in ['dl', 'rd', 'ur', 'lu']:
-            veh_phis_rad_delta = tf.where(middle_cond, (veh_vs / (CROSSROAD_SIZE/2+0.5*LANE_WIDTH)) / self.base_frequency, zeros)
-        elif mode in ['dr', 'ru', 'ul', 'ld']:
-            veh_phis_rad_delta = tf.where(middle_cond, -(veh_vs / (CROSSROAD_SIZE/2-2.5*LANE_WIDTH)) / self.base_frequency, zeros)  # TODO：ONLY FOR 3LANE
-        else:
-            veh_phis_rad_delta = zeros
+        egos = ego_infos[:, :6]
+        lstm_input = tf.stop_gradient(tf.convert_to_tensor(tf.concat([egos, vehs], 1)))
+        output = plc.surroundings(lstm_input)
         next_veh_xs, next_veh_ys, next_veh_vs, next_veh_phis_rad = \
-            veh_xs + veh_xs_delta, veh_ys + veh_ys_delta, veh_vs, veh_phis_rad + veh_phis_rad_delta
+        output[:, 0], output[:, 1], output[:, 2], output[:, 3]
+        # veh_phis_rad = veh_phis * np.pi / 180.
+        #
+        # middle_cond = logical_and(logical_and(veh_xs > -CROSSROAD_SIZE/2, veh_xs < CROSSROAD_SIZE/2),
+        #                           logical_and(veh_ys > -CROSSROAD_SIZE/2, veh_ys < CROSSROAD_SIZE/2))
+        # zeros = tf.zeros_like(veh_xs)
+        #
+        # veh_xs_delta = veh_vs / self.base_frequency * tf.cos(veh_phis_rad)
+        # veh_ys_delta = veh_vs / self.base_frequency * tf.sin(veh_phis_rad)
+        #
+        # if mode in ['dl', 'rd', 'ur', 'lu']:
+        #     veh_phis_rad_delta = tf.where(middle_cond, (veh_vs / (CROSSROAD_SIZE/2+0.5*LANE_WIDTH)) / self.base_frequency, zeros)
+        # elif mode in ['dr', 'ru', 'ul', 'ld']:
+        #     veh_phis_rad_delta = tf.where(middle_cond, -(veh_vs / (CROSSROAD_SIZE/2-2.5*LANE_WIDTH)) / self.base_frequency, zeros)  # TODO：ONLY FOR 3LANE
+        # else:
+        #     veh_phis_rad_delta = zeros
+        # next_veh_xs, next_veh_ys, next_veh_vs, next_veh_phis_rad = \
+        #     veh_xs + veh_xs_delta, veh_ys + veh_ys_delta, veh_vs, veh_phis_rad + veh_phis_rad_delta
         next_veh_phis_rad = tf.where(next_veh_phis_rad > np.pi, next_veh_phis_rad - 2 * np.pi, next_veh_phis_rad)
         next_veh_phis_rad = tf.where(next_veh_phis_rad <= -np.pi, next_veh_phis_rad + 2 * np.pi, next_veh_phis_rad)
         next_veh_phis = next_veh_phis_rad * 180 / np.pi
         return tf.stack([next_veh_xs, next_veh_ys, next_veh_vs, next_veh_phis], 1)
-
-    def predict_for_a_mode_LSTM(self, vehs, mode):
-        # this function is for
-        return
 
     def render(self, mode='human'):
         if mode == 'human':
