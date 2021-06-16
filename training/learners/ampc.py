@@ -111,7 +111,7 @@ class AMPCLearner(object):
         lstm_obs = self.tf.constant(self.batch_data_lstm['batch_obs']) # [batch_size, 29, dimensions]
         surroundings_loss = []
         for i in range(25):
-            pred = self.lstm(lstm_obs[:, i:i+4, (0,1,2,3,4,5,9,10,11,12)])  # 最后的维度
+            pred = self.lstm(self.tf.convert_to_tensor(lstm_obs[:, i:i+4, (0,1,2,3,4,5,9,10,11,12)]))  # 最后的维度
             loss_square = self.tf.square(pred - lstm_obs[:, i+4, 0:10])
             surroundings_loss.append(loss_square)
 
