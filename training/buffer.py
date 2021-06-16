@@ -78,39 +78,6 @@ class ReplayBuffer(object):
         idxes = self.sample_idxes(batch_size)
         return self.sample_with_idxes(idxes)
 
-    def continuous_sample(self, batch_size):
-        # 先随机取到一个index，然后连续读出index+1， index+2 直到index+5
-        idxes = self.continuous_sample_idxes(batch_size)
-        return self.continuous_sample_with_idxes(idxes)
-
-    def continuous_sample_idxes(self, batch_size):
-        idxes = [random.randint(0, len(self._storage) - 1) for _ in range(batch_size)]
-        for idx in idxes:
-            if idx % 200 < 4:
-                idx + random.randint(4, 190)
-        return np.array(idxes, dtype=np.int32)
-
-    def continuous_sample_with_idxes(self, idxes):
-        return list(self._continuous_encode_sample(idxes)) + [idxes, ]
-
-    def _continuous_encode_sample(self, idxes):
-        obses_t, actions, rewards, obses_tp1, dones, ref_indexs = [], [], [], [], [], []
-        for idx in idxes:
-            for i in range(4):
-                # index: [1:4], obses = [s0:s3 + s4], where s4 is the predictive real value
-                # s0, s1, s2, s3 are 4 historical values, where s3 is the current value
-                data = self._storage[idx - 3 + i]
-                obs_t, action, reward, obs_tp1, done, ref_index = data
-                obses_t.append(np.array(obs_t, copy=False))
-                actions.append(np.array(action, copy=False))
-                rewards.append(reward)
-                obses_tp1.append(np.array(obs_tp1, copy=False))
-                dones.append(done)
-                ref_indexs.append(ref_index)
-        return np.array(obses_t), np.array(actions), np.array(rewards), \
-               np.array(obses_tp1), np.array(dones), np.array(ref_indexs)
-
-
     def add_batch(self, batch):
         for trans in batch:
             self.add(*trans, 0)
@@ -122,7 +89,7 @@ class ReplayBuffer(object):
             logger.info('Buffer info: {}'.format(self.get_stats()))
 
         self.replay_times += 1
-        return self.sample(self.replay_batch_size)
+        return self.sample(self.replay_batch_size) # here the size of return is [batch_size, 29, dimensions]
 
 class ReplayBufferPro(ReplayBuffer):
     # this class will samples data while keeping 4 continuity
@@ -200,23 +167,31 @@ class DistendReplyBuffer(ReplayBuffer):
             return continuity_judge
 
     def sample_with_idxes(self, idxes):
-        return list(self._encode_sample(idxes)) + [idxes,]
+        return list(self._encode_sample(idxes))
 
     def sample(self, batch_size):
         idxes = self.sample_idxes(batch_size)
         return self.sample_with_idxes(idxes)
 
     def _encode_sample(self, idxes):
+        # 目标维度：[batch, 29，obs_dim]
         obses_t, actions, rewards, obses_tp1, dones, ref_indexs = [], [], [], [], [], []
         for idx in idxes:
+            s_temp, a_temp, r_temp, ss_temp, ds_temp, ris_temp = [], [], [], [], [], []
             for i in range(29):
                 data = self._storage[idx-4+i]
                 obs_t, action, reward, obs_tp1, done, ref_index = data
-                obses_t.append(np.array(obs_t, copy=False))
-                actions.append(np.array(action, copy=False))
-                rewards.append(reward)
-                obses_tp1.append(np.array(obs_tp1, copy=False))
-                dones.append(done)
-                ref_indexs.append(ref_index)
+                s_temp.append(np.array(obs_t, copy=False))
+                a_temp.append(np.array(action, copy=False))
+                r_temp.append(reward)
+                ss_temp.append(np.array(obs_tp1, copy=False))
+                ds_temp.append(done)
+                ris_temp.append(ref_index)
+            obses_t.append(np.array(s_temp, copy=False))
+            actions.append(np.array(a_temp, copy=False))
+            rewards.append(r_temp)
+            obses_tp1.append(np.array(ss_temp, copy=False))
+            dones.append(ds_temp)
+            ref_indexs.append(ris_temp)
         return np.array(obses_t), np.array(actions), np.array(rewards), \
                np.array(obses_tp1), np.array(dones), np.array(ref_indexs)

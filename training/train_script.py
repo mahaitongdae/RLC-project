@@ -33,7 +33,7 @@ logging.basicConfig(level=logging.INFO)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 NAME2WORKERCLS = dict([('OffPolicyWorker', OffPolicyWorker)])
 NAME2LEARNERCLS = dict([('AMPC', AMPCLearner)])
-NAME2BUFFERCLS = dict([('normal', ReplayBuffer), ('None', None)])
+NAME2BUFFERCLS = dict([('normal', ReplayBuffer), ('None', None)]) # 这里可以定义很多buffer，
 NAME2OPTIMIZERCLS = dict([('OffPolicyAsync', OffPolicyAsyncOptimizer),
                           ('SingleProcessOffPolicy', SingleProcessOffPolicyOptimizer)])
 NAME2POLICIES = dict([('Policy4Toyota', Policy4Toyota)])

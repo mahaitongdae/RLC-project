@@ -14,11 +14,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from tensorflow import logical_and
+from training.model import LSTMNet
+from training import buffer
 
 # gym.envs.user_defined.toyota_env.
 from endtoend_env_utils import rotate_coordination, L, W, CROSSROAD_SIZE, LANE_WIDTH, LANE_NUMBER, \
     VEHICLE_MODE_LIST, EXPECTED_V
-
 tf.config.threading.set_inter_op_parallelism_threads(1)
 tf.config.threading.set_intra_op_parallelism_threads(1)
 
@@ -373,6 +374,10 @@ class EnvironmentModel(object):  # all tensors
         next_veh_phis_rad = tf.where(next_veh_phis_rad <= -np.pi, next_veh_phis_rad + 2 * np.pi, next_veh_phis_rad)
         next_veh_phis = next_veh_phis_rad * 180 / np.pi
         return tf.stack([next_veh_xs, next_veh_ys, next_veh_vs, next_veh_phis], 1)
+
+    def predict_for_a_mode_LSTM(self, vehs, mode):
+        # this function is for
+        return
 
     def render(self, mode='human'):
         if mode == 'human':
