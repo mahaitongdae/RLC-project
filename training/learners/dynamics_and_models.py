@@ -18,7 +18,7 @@ from training.model import LSTMNet
 from training import buffer
 
 # gym.envs.user_defined.toyota_env.
-from endtoend_env_utils import rotate_coordination, L, W, CROSSROAD_SIZE, LANE_WIDTH, LANE_NUMBER, \
+from gym.envs.user_defined.rlc.endtoend_env_utils import rotate_coordination, L, W, CROSSROAD_SIZE, LANE_WIDTH, LANE_NUMBER, \
     VEHICLE_MODE_LIST, EXPECTED_V
 tf.config.threading.set_inter_op_parallelism_threads(1)
 tf.config.threading.set_intra_op_parallelism_threads(1)

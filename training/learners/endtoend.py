@@ -19,10 +19,10 @@ from tensorflow import logical_and
 from gym.utils import seeding
 
 # gym.envs.user_defined.toyota_env.
-from dynamics_and_models import VehicleDynamics, ReferencePath, EnvironmentModel
-from endtoend_env_utils import shift_coordination, rotate_coordination, rotate_and_shift_coordination, deal_with_phi, \
+from gym.envs.user_defined.rlc.dynamics_and_models import VehicleDynamics, ReferencePath, EnvironmentModel
+from gym.envs.user_defined.rlc.endtoend_env_utils import shift_coordination, rotate_coordination, rotate_and_shift_coordination, deal_with_phi, \
     L, W, CROSSROAD_SIZE, LANE_WIDTH, LANE_NUMBER, judge_feasible, MODE2TASK, VEHICLE_MODE_DICT, VEH_NUM, EXPECTED_V
-from traffic import Traffic
+from gym.envs.user_defined.rlc.traffic import Traffic
 
 warnings.filterwarnings("ignore")
 

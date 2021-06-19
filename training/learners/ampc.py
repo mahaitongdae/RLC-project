@@ -10,7 +10,7 @@
 import logging
 
 import numpy as np
-from dynamics_and_models import EnvironmentModel
+from gym.envs.user_defined.rlc.dynamics_and_models import EnvironmentModel
 from training.preprocessor import Preprocessor
 from training.utils.misc import TimerStat, args2envkwargs
 

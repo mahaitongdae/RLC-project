@@ -126,9 +126,9 @@ def built_AMPC_parser():
     # optimizer (PABAL)
     parser.add_argument('--max_sampled_steps', type=int, default=0)
     parser.add_argument('--max_iter', type=int, default=150000)
-    parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_learners', type=int, default=30)
-    parser.add_argument('--num_buffers', type=int, default=4)
+    parser.add_argument('--num_workers', type=int, default=1)
+    parser.add_argument('--num_learners', type=int, default=1)
+    parser.add_argument('--num_buffers', type=int, default=1)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)
     parser.add_argument('--grads_max_reuse', type=int, default=20)
@@ -164,7 +164,7 @@ def main(alg_name):
     args = built_parser(alg_name)
     logger.info('begin training agents with parameter {}'.format(str(args)))
     if args.mode == 'training':
-        ray.init(object_store_memory=5120*1024*1024)
+        ray.init(object_store_memory=1024*1024*1024)
         os.makedirs(args.result_dir)
         with open(args.result_dir + '/config.json', 'w', encoding='utf-8') as f:
             json.dump(vars(args), f, ensure_ascii=False, indent=4)
