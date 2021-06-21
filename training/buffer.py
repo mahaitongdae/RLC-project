@@ -156,11 +156,12 @@ class DistendReplyBuffer(ReplayBuffer):
                 judgement = self.judge(new_index)
             if new_index != idx:
                 idxes[ith] = new_index
+        print('Sampling idxes are done.')
         return np.array(idxes, dtype=np.int32)
 
     def judge(self, idx):
         continuity_judge = True
-        current_ref = self._storage[idx][5]
+        #current_ref = self._storage[idx][5]
         for i in range(28):
             if self._storage[idx-4+i][4] == True:
                 continuity_judge = False

@@ -16,7 +16,7 @@ import gym
 
 import ray
 
-from buffer import ReplayBuffer
+from buffer import ReplayBuffer,  DistendReplyBuffer
 from evaluator import Evaluator
 from learners.ampc import AMPCLearner
 from optimizer import OffPolicyAsyncOptimizer, SingleProcessOffPolicyOptimizer
@@ -33,7 +33,7 @@ logging.basicConfig(level=logging.INFO)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 NAME2WORKERCLS = dict([('OffPolicyWorker', OffPolicyWorker)])
 NAME2LEARNERCLS = dict([('AMPC', AMPCLearner)])
-NAME2BUFFERCLS = dict([('normal', ReplayBuffer), ('None', None)]) # 这里可以定义很多buffer，
+NAME2BUFFERCLS = dict([('normal', ReplayBuffer), ('shunli',  DistendReplyBuffer)]) # 这里可以定义很多buffer，
 NAME2OPTIMIZERCLS = dict([('OffPolicyAsync', OffPolicyAsyncOptimizer),
                           ('SingleProcessOffPolicy', SingleProcessOffPolicyOptimizer)])
 NAME2POLICIES = dict([('Policy4Toyota', Policy4Toyota)])
@@ -64,7 +64,7 @@ def built_AMPC_parser():
     parser.add_argument('--policy_type', type=str, default='Policy4Toyota')
     parser.add_argument('--worker_type', type=str, default='OffPolicyWorker')
     parser.add_argument('--evaluator_type', type=str, default='Evaluator')
-    parser.add_argument('--buffer_type', type=str, default='normal')
+    parser.add_argument('--buffer_type', type=str, default='shunli')
     parser.add_argument('--optimizer_type', type=str, default='OffPolicyAsync')
     parser.add_argument('--off_policy', type=str, default=True)
 
