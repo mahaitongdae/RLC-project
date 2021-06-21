@@ -160,7 +160,7 @@ class DistendReplyBuffer(ReplayBuffer):
 
     def judge(self, idx):
         continuity_judge = True
-        current_ref = self._storage[idx][5]
+        # current_ref = self._storage[idx][5]
         for i in range(28):
             if self._storage[idx-4+i][4] == True:
                 continuity_judge = False

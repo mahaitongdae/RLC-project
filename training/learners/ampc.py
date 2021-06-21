@@ -10,7 +10,7 @@
 import logging
 
 import numpy as np
-from gym.envs.user_defined.rlc.dynamics_and_models import EnvironmentModel
+from dynamics_and_models import EnvironmentModel
 from training.preprocessor import Preprocessor
 from training.utils.misc import TimerStat, args2envkwargs
 
@@ -97,8 +97,8 @@ class AMPCLearner(object):
         obj_v_pred = self.policy_with_value.compute_obj_v(processed_obses)
         # con_v_pred = self.policy_with_value.compute_con_v(processed_obses)
 
-        # LSTMNet loss
-        lstm_obs = self.tf.constant(self.batch_data_lstm['batch_obs'])  # [batch_size, 29, dimensions]
+        # LSTMNet loss 这里还没有处理一下周车相对于自车的状态
+        lstm_obs = self.batch_data_lstm['batch_obs']  # [batch_size, 29, dimensions]
         surroundings_loss = []
 
         for i in range(self.num_rollout_list_for_policy_update[0]):
@@ -113,7 +113,7 @@ class AMPCLearner(object):
             # lstm part
             pred = self.policy_with_value.surroundings(
                 self.tf.convert_to_tensor(lstm_obs[:, i:i + 4, (0, 1, 2, 3, 4, 5, 9, 10, 11, 12)]))  # 最后的维度
-            loss_square = self.tf.square(pred - lstm_obs[:, i + 4, 0:10])
+            loss_square = self.tf.square(pred - lstm_obs[:, i + 4, (9, 10, 11, 12)])
             surroundings_loss.append(loss_square)
 
 
@@ -151,7 +151,7 @@ class AMPCLearner(object):
         # with self.tf.name_scope('con_v_gradient') as scope:
         #     con_v_grad = tape.gradient(con_v_loss, self.policy_with_value.con_v.trainable_weights)
         with self.tf.name_scope('lstm_gradient')as scope:
-            lstm_grad = tape.gradient(lstm_loss, self.lstm.tranable_weights)
+            lstm_grad = tape.gradient(lstm_loss, self.policy_with_value.surroundings.tranable_weights)
 
         return pg_grad, obj_v_grad, obj_v_loss, obj_loss, \
                punish_term_for_training, punish_loss, pg_loss,\
@@ -202,7 +202,7 @@ class AMPCLearner(object):
             # con_v_grad_norm=con_v_grad_norm.numpy()
         ))
 
-        grads = obj_v_grad + pg_grad
+        grads = obj_v_grad + pg_grad + lstm_grad
 
         return list(map(lambda x: x.numpy(), grads))
 
