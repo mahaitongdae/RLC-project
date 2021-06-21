@@ -253,7 +253,7 @@ class OffPolicyAsyncOptimizer(object):
                     self.num_samples_dropped += 1
                 else:
                     samples = ray.get(replay)
-                    print(f'Here in optimazer lines 254 show the shape of samples(list){np.array(samples).shape}')
+                    print(f'Here in optimazer lines 254 show the samples(list){samples}')
                     self.learner_queue.put((rb, samples))
 
         # learning
