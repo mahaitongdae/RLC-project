@@ -10,7 +10,7 @@
 import logging
 
 import numpy as np
-from dynamics_and_models import EnvironmentModel
+from gym.envs.user_defined.rlc.dynamics_and_models import EnvironmentModel
 from training.preprocessor import Preprocessor
 from training.utils.misc import TimerStat, args2envkwargs
 
@@ -111,9 +111,8 @@ class AMPCLearner(object):
             veh2veh4real_sum += veh2veh4real
             veh2road4real_sum += veh2road4real
             # lstm part
-            pred = self.policy_with_value.surroundings(
-                self.tf.convert_to_tensor(lstm_obs[:, i:i + 4, (0, 1, 2, 3, 4, 5, 9, 10, 11, 12)]))  # 最后的维度
-            loss_square = self.tf.square(pred - lstm_obs[:, i + 4, (9, 10, 11, 12)])
+            preds = self.policy_with_value.predict_multi_vehs(lstm_obs, i)
+            loss_square = self.tf.square(preds - lstm_obs[:, i + 4, 9:]) # lstm_obs[:, i+4, all surrounding vehicles]
             surroundings_loss.append(loss_square)
 
 
@@ -168,7 +167,8 @@ class AMPCLearner(object):
     def compute_gradient(self, samples, rb, iteration):  # 还没改所有的compute_gradient的输入参数
         # the input of this function/the shape of samples is [6, batch_size, 29, dimensions]
         self.get_batch_data_lstm(samples, rb)
-        original_samples = samples[:,:,4,:]  # the size of original_samples is [6, batch_size, dimensions]
+        original_samples = np.array(samples)[:,:,4,:]  # the size of original_samples is [6, batch_size, dimensions]
+        print(f'In ampc lines 170 show the length of original_samples is {original_samples.shape}')
         self.get_batch_data(original_samples, rb)
         mb_obs = self.tf.constant(self.batch_data['batch_obs'])  # the size of mb_bos is [batch_size, dimensions]
         iteration = self.tf.convert_to_tensor(iteration, self.tf.int32)
