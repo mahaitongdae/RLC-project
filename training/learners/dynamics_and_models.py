@@ -352,7 +352,7 @@ class EnvironmentModel(object):  # all tensors
         return pred
 
     def predict_for_a_mode(self, ego_infos, vehs, mode, plc):
-        # 注意单位好想有个单位转换的问题
+        # 注意单位，好像有个单位转换的问题
         veh_xs, veh_ys, veh_vs, veh_phis = vehs[:, 0], vehs[:, 1], vehs[:, 2], vehs[:, 3]
         egos = ego_infos[:, :6]
         lstm_input = tf.stop_gradient(tf.convert_to_tensor(tf.concat([egos, vehs], 1)))

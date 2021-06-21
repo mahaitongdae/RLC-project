@@ -219,8 +219,7 @@ class OffPolicyAsyncOptimizer(object):
                 learner.set_ppc_params.remote(ppc_params)
             rb, _ = random_choice_with_index(self.replay_buffers)
             samples = ray.get(rb.replay.remote())
-            self.learn_tasks.add(learner, learner.compute_gradient.remote(samples[:-1], rb, samples[-1],
-                                                                          self.local_worker.iteration))
+            self.learn_tasks.add(learner, learner.compute_gradient.remote(samples, rb, self.local_worker.iteration))
 
     def step(self):
         assert self.update_thread.is_alive()
@@ -349,7 +348,7 @@ class SingleProcessOffPolicyOptimizer(object):
             if self.args.obs_preprocess_type == 'normalize' or \
                     self.args.reward_preprocess_type == 'normalize':
                 self.learner.set_ppc_params(self.worker.get_ppc_params())
-            grads = self.learner.compute_gradient(samples[:-1], self.replay_buffer, samples[-1], self.iteration)
+            grads = self.learner.compute_gradient(samples, self.replay_buffer, self.iteration)
             learner_stats = self.learner.get_stats()
             if self.args.buffer_type == 'priority':
                 info_for_buffer = self.learner.get_info_for_buffer()
