@@ -47,6 +47,7 @@ class ReplayBuffer(object):
         return len(self._storage)
 
     def add(self, obs_t, action, reward, obs_tp1, done, ref_index, weight):
+        print('The buffer starts to add.')
         data = (obs_t, action, reward, obs_tp1, done, ref_index)
         if self._next_idx >= len(self._storage):
             self._storage.append(data)
@@ -83,6 +84,7 @@ class ReplayBuffer(object):
             self.add(*trans, 0)
 
     def replay(self):
+        print('Start to replay')
         if len(self._storage) < self.replay_starts:
             return None
         if self.buffer_id == 1 and self.replay_times % self.args.buffer_log_interval == 0:
@@ -171,6 +173,7 @@ class DistendReplyBuffer(ReplayBuffer):
         return list(self._encode_sample(idxes))
 
     def sample(self, batch_size):
+        print('Start sample!!!')
         idxes = self.sample_idxes(batch_size)
         return self.sample_with_idxes(idxes)
 

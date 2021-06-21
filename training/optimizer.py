@@ -164,6 +164,7 @@ class OffPolicyAsyncOptimizer(object):
 
         # fill buffer to replay starts
         logger.info('start filling the replay')
+        print('Now we are at optimizer lines 167 :Start to fill buffer ')
         while not all([l >= self.args.replay_starts for l in
                        ray.get([rb.__len__.remote() for rb in self.replay_buffers])]):
             for worker, objID in list(self.sample_tasks.completed()):
@@ -192,6 +193,7 @@ class OffPolicyAsyncOptimizer(object):
                                learning_time=self.timers['learning_timer'].mean
                                )
                           )
+        print('Start to get state')
         return self.stats
 
     def _set_workers(self):
@@ -250,6 +252,7 @@ class OffPolicyAsyncOptimizer(object):
                     self.num_samples_dropped += 1
                 else:
                     samples = ray.get(replay)
+                    print(f'Here show the shape of samples{samples}')
                     self.learner_queue.put((rb, samples))
 
         # learning
