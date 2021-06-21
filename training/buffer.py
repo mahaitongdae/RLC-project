@@ -47,7 +47,6 @@ class ReplayBuffer(object):
         return len(self._storage)
 
     def add(self, obs_t, action, reward, obs_tp1, done, ref_index, weight):
-        print('The buffer starts to add.')
         data = (obs_t, action, reward, obs_tp1, done, ref_index)
         if self._next_idx >= len(self._storage):
             self._storage.append(data)
@@ -84,7 +83,6 @@ class ReplayBuffer(object):
             self.add(*trans, 0)
 
     def replay(self):
-        print('Start to replay')
         if len(self._storage) < self.replay_starts:
             return None
         if self.buffer_id == 1 and self.replay_times % self.args.buffer_log_interval == 0:
@@ -150,20 +148,23 @@ class DistendReplyBuffer(ReplayBuffer):
 
     def sample_idxes(self, batch_size):
         # make sure to select the idxes which have 29 continuous steps s
-        idxes = [random.randint(4, len(self._storage) - 1) for _ in range(batch_size)]
+        idxes = [random.randint(4, len(self._storage) - 29) for _ in range(batch_size)]
         for ith, idx in enumerate(idxes):
+            new_index = idx
             judgement = self.judge(idx)
             while judgement == False:
                 new_index = random.randint(4, len(self._storage) - 1)
                 judgement = self.judge(new_index)
             if new_index != idx:
                 idxes[ith] = new_index
-        print('Sampling idxes are done.')
+        # print('Sampling idxes are done.')
         return np.array(idxes, dtype=np.int32)
 
     def judge(self, idx):
         continuity_judge = True
         #current_ref = self._storage[idx][5]
+        # to_judge = self._storage[idx-4:idx+25][4]
+        # if True in to_judge
         for i in range(28):
             if self._storage[idx-4+i][4] == True:
                 continuity_judge = False
@@ -173,7 +174,6 @@ class DistendReplyBuffer(ReplayBuffer):
         return list(self._encode_sample(idxes))
 
     def sample(self, batch_size):
-        print('Start sample!!!')
         idxes = self.sample_idxes(batch_size)
         return self.sample_with_idxes(idxes)
 
@@ -181,9 +181,12 @@ class DistendReplyBuffer(ReplayBuffer):
         # 目标维度：[batch, 29，obs_dim]
         obses_t, actions, rewards, obses_tp1, dones, ref_indexs = [], [], [], [], [], []
         for idx in idxes:
+            # print(f'*****Here in buffer lines 184 the idx is {idx}*****')
             s_temp, a_temp, r_temp, ss_temp, ds_temp, ris_temp = [], [], [], [], [], []
+            # print(f'The length of the self._storage is {len(self._storage)}')
             for i in range(29):
                 data = self._storage[idx-4+i]
+                # print(f'*****Here in buffer lines 187 the self._storage[idx-4+i] is {data}*****')
                 obs_t, action, reward, obs_tp1, done, ref_index = data
                 s_temp.append(np.array(obs_t, copy=False))
                 a_temp.append(np.array(action, copy=False))

@@ -12,6 +12,7 @@ import os
 import queue
 import random
 import threading
+import numpy as np
 
 import ray
 import tensorflow as tf
@@ -246,12 +247,13 @@ class OffPolicyAsyncOptimizer(object):
         # replay
         with self.timers["replay_timer"]:
             for rb, replay in self.replay_tasks.completed():
+                # print(f'In optimizer lines 250 show the replay{replay}')
                 self.replay_tasks.add(rb, rb.replay.remote())
                 if self.learner_queue.full():
                     self.num_samples_dropped += 1
                 else:
                     samples = ray.get(replay)
-                    print(f'Here show the shape of samples{samples}')
+                    print(f'Here in optimazer lines 254 show the shape of samples(list){np.array(samples).shape}')
                     self.learner_queue.put((rb, samples))
 
         # learning
@@ -264,6 +266,7 @@ class OffPolicyAsyncOptimizer(object):
                     info_for_buffer['rb'].update_priorities.remote(info_for_buffer['indexes'],
                                                                    info_for_buffer['td_error'])
                 rb, samples = self.learner_queue.get(block=False)
+                print(f'\n***** Here in the optimizer lines267, the shape of samples(list) is {np.array(samples).shape}***** \n')
                 if ppc_params and \
                         (self.args.obs_preprocess_type == 'normalize' or self.args.reward_preprocess_type == 'normalize'):
                     learner.set_ppc_params.remote(ppc_params)
