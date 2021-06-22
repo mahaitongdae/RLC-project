@@ -153,7 +153,7 @@ class DistendReplyBuffer(ReplayBuffer):
             new_index = idx
             judgement = self.judge(idx)
             while judgement == False:
-                new_index = random.randint(4, len(self._storage) - 1)
+                new_index = random.randint(4, len(self._storage) - 29)
                 judgement = self.judge(new_index)
             if new_index != idx:
                 idxes[ith] = new_index
@@ -175,6 +175,7 @@ class DistendReplyBuffer(ReplayBuffer):
 
     def sample(self, batch_size):
         idxes = self.sample_idxes(batch_size)
+        print(f'In buffer lines 178 the length of the idxes is {len(idxes)}')
         return self.sample_with_idxes(idxes)
 
     def _encode_sample(self, idxes):

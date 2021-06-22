@@ -165,7 +165,7 @@ class OffPolicyAsyncOptimizer(object):
 
         # fill buffer to replay starts
         logger.info('start filling the replay')
-        print('Now we are at optimizer lines 167 :Start to fill buffer ')
+        # print('Now we are at optimizer lines 167 :Start to fill buffer ')
         while not all([l >= self.args.replay_starts for l in
                        ray.get([rb.__len__.remote() for rb in self.replay_buffers])]):
             for worker, objID in list(self.sample_tasks.completed()):
@@ -194,7 +194,7 @@ class OffPolicyAsyncOptimizer(object):
                                learning_time=self.timers['learning_timer'].mean
                                )
                           )
-        print('Start to get state')
+        # print('Start to get state')
         return self.stats
 
     def _set_workers(self):
@@ -220,6 +220,7 @@ class OffPolicyAsyncOptimizer(object):
                 learner.set_ppc_params.remote(ppc_params)
             rb, _ = random_choice_with_index(self.replay_buffers)
             samples = ray.get(rb.replay.remote())
+            print(f'In optimizer lines 223 during set learners show the length of samples is {len(samples)}')
             self.learn_tasks.add(learner, learner.compute_gradient.remote(samples, rb, self.local_worker.iteration))
 
     def step(self):
@@ -266,7 +267,7 @@ class OffPolicyAsyncOptimizer(object):
                     info_for_buffer['rb'].update_priorities.remote(info_for_buffer['indexes'],
                                                                    info_for_buffer['td_error'])
                 rb, samples = self.learner_queue.get(block=False)
-                print(f'\n***** Here in the optimizer lines267, the shape of samples is {np.array(samples).shape}***** \n')
+                print(f'Here in the optimizer lines267 during learning the length of samples is {len(samples)}\n')
                 if ppc_params and \
                         (self.args.obs_preprocess_type == 'normalize' or self.args.reward_preprocess_type == 'normalize'):
                     learner.set_ppc_params.remote(ppc_params)
@@ -274,8 +275,7 @@ class OffPolicyAsyncOptimizer(object):
                 if weights is None:
                     weights = ray.put(self.local_worker.get_weights())
                 learner.set_weights.remote(weights)
-                self.learn_tasks.add(learner, learner.compute_gradient.remote(samples[:-1], rb, samples[-1],
-                                                                              self.local_worker.iteration))
+                self.learn_tasks.add(learner, learner.compute_gradient.remote(samples, rb, self.local_worker.iteration))
                 if self.update_thread.inqueue.full():
                     self.num_grads_dropped += 1
                 self.update_thread.inqueue.put([grads, learner_stats])
@@ -344,6 +344,7 @@ class SingleProcessOffPolicyOptimizer(object):
         # replay
         with self.timers["replay_timer"]:
             samples = self.replay_buffer.replay()
+            print(f'In optimizer lines 347 the length of samples is {len(samples)}\n')
 
         # learning
         with self.timers['learning_timer']:
