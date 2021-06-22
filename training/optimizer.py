@@ -253,7 +253,7 @@ class OffPolicyAsyncOptimizer(object):
                     self.num_samples_dropped += 1
                 else:
                     samples = ray.get(replay)
-                    print(f'Here in optimazer lines 254 show the shape of samples(list){np.array(samples).shape}')
+                    # print(f'Here in optimazer lines 256 show the samples{samples}')
                     self.learner_queue.put((rb, samples))
 
         # learning
@@ -266,7 +266,7 @@ class OffPolicyAsyncOptimizer(object):
                     info_for_buffer['rb'].update_priorities.remote(info_for_buffer['indexes'],
                                                                    info_for_buffer['td_error'])
                 rb, samples = self.learner_queue.get(block=False)
-                print(f'\n***** Here in the optimizer lines267, the shape of samples(list) is {np.array(samples).shape}***** \n')
+                print(f'\n***** Here in the optimizer lines267, the shape of samples is {np.array(samples).shape}***** \n')
                 if ppc_params and \
                         (self.args.obs_preprocess_type == 'normalize' or self.args.reward_preprocess_type == 'normalize'):
                     learner.set_ppc_params.remote(ppc_params)

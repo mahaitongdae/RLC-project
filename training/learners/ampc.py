@@ -167,7 +167,8 @@ class AMPCLearner(object):
     def compute_gradient(self, samples, rb, iteration):  # 还没改所有的compute_gradient的输入参数
         # the input of this function/the shape of samples is [6, batch_size, 29, dimensions]
         self.get_batch_data_lstm(samples, rb)
-        original_samples = np.array(samples)[:,:,4,:]  # the size of original_samples is [6, batch_size, dimensions]
+        print(f'In ampc lines 170 show the shape of samples is {samples.shape}')
+        original_samples = samples[:,:,4,:]  # the size of original_samples is [6, batch_size, dimensions]
         print(f'In ampc lines 170 show the length of original_samples is {original_samples.shape}')
         self.get_batch_data(original_samples, rb)
         mb_obs = self.tf.constant(self.batch_data['batch_obs'])  # the size of mb_bos is [batch_size, dimensions]
