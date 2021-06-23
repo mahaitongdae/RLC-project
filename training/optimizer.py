@@ -220,7 +220,6 @@ class OffPolicyAsyncOptimizer(object):
                 learner.set_ppc_params.remote(ppc_params)
             rb, _ = random_choice_with_index(self.replay_buffers)
             samples = ray.get(rb.replay.remote())
-            print(f'In optimizer lines 223 during set learners show the length of samples is {len(samples)}')
             self.learn_tasks.add(learner, learner.compute_gradient.remote(samples, rb, self.local_worker.iteration))
 
     def step(self):

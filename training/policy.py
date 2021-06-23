@@ -129,14 +129,15 @@ class Policy4Toyota(tf.Module):
     #         return tf.squeeze(self.con_v(obs), axis=1)
 
     def predict_multi_vehs(self, obs, t):
-        ego_obs = obs[:, t:t + 4, 0:6]
+        ego_obs = obs[:, t:t + 4, 0:6]  # obs.shape = (256, 29, 41)
         veh_nums = 8 #todo
         preds = []
         for veh in veh_nums:
             veh_obs = obs[:, t:t + 4, 9 + veh * 4 : 9 + veh * 4 + 4]
-            single_veh_obs = np.concatenate([ego_obs, veh_obs], axis=2)
+            single_veh_obs = np.concatenate((ego_obs, veh_obs), axis=2)
+            print(f'In policy lines 138 the shape of single_veh_obs(the input of the lstm net) is {single_veh_obs.shape} \n')
             predict = self.surroundings(self.tf.convert_to_tensor(single_veh_obs, dtype=self.tf.float32))
-            print(predict.shape)
+            print(f'In policy lines 140 the shape of the output of the lstm is {predict.shape}')
             # the size of predict is [batch_size, 1, 28]
             preds.append(predict)
         return preds

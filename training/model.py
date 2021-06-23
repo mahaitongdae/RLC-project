@@ -20,7 +20,7 @@ tf.config.threading.set_intra_op_parallelism_threads(1)
 class LSTMNet(Model):
     def __init__(self, input_dim=10, timesteps=4, hidden_size1=128, hidden_size2=32, output_dim=4, **kwargs):
         # the output_dim is not decided yet
-        # input_shape=(batch=1, timesteps=4, feature=10)
+        # input_shape=(batch, timesteps=4, feature=10)
         super(LSTMNet, self).__init__()
         self.LSTM1 = LSTM(hidden_size1, dropout=0.5, return_sequences=True, dtype=tf.float32)
         self.LSTM2 = LSTM(hidden_size2, dropout=0.5, return_sequences=False, dtype=tf.float32)

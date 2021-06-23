@@ -83,8 +83,10 @@ class AMPCLearner(object):
         pf = init_pf * self.tf.pow(amplifier, self.tf.cast(ite//interval, self.tf.float32))
         return pf
 
-    def model_rollout_for_update(self, start_obses, ite, mb_ref_index):
+    def model_rollout_for_update(self, start_obses, ite, mb_ref_index, mb_batch_obs):  # start_obses.shape = (256, 41)
+        print(f'In ampc lines 87 the shape of the input (start_obses (256,41) of function model_rollout_for_update is {start_obses.shape}\n ')
         start_obses = self.tf.tile(start_obses, [self.M, 1])
+        print(f'In ampc lines 89 the shape of the start_obses is changed to {start_obses.shape}\n ')
         self.model.reset(start_obses, mb_ref_index)
         rewards_sum = self.tf.zeros((start_obses.shape[0],))
         punish_terms_for_training_sum = self.tf.zeros((start_obses.shape[0],))
@@ -104,7 +106,7 @@ class AMPCLearner(object):
         for i in range(self.num_rollout_list_for_policy_update[0]):
             processed_obses = self.preprocessor.tf_process_obses(obses)
             actions, _ = self.policy_with_value.compute_action(processed_obses)
-            obses, rewards, punish_terms_for_training, real_punish_term, veh2veh4real, veh2road4real = self.model.rollout_out(actions, self.policy_with_value)
+            obses, rewards, punish_terms_for_training, real_punish_term, veh2veh4real, veh2road4real = self.model.rollout_out(actions, self.policy_with_value, mb_batch_obs, i)
             rewards_sum += self.preprocessor.tf_process_rewards(rewards)
             punish_terms_for_training_sum += punish_terms_for_training
             real_punish_terms_sum += real_punish_term
@@ -137,11 +139,11 @@ class AMPCLearner(object):
                real_punish_term, veh2veh4real, veh2road4real, pf, lstm_loss
 
     @tf.function
-    def forward_and_backward(self, mb_obs, ite, mb_ref_index):
+    def forward_and_backward(self, mb_obs, ite, mb_ref_index, mb_batch_obs):
         with self.tf.GradientTape(persistent=True) as tape:
             obj_v_loss, obj_loss, punish_term_for_training, punish_loss, pg_loss, \
             real_punish_term, veh2veh4real, veh2road4real, pf, lstm_loss\
-                = self.model_rollout_for_update(mb_obs, ite, mb_ref_index)
+                = self.model_rollout_for_update(mb_obs, ite, mb_ref_index, mb_batch_obs)
 
         with self.tf.name_scope('policy_gradient') as scope:
             pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)
@@ -175,15 +177,16 @@ class AMPCLearner(object):
         converted = [e0, e1, e2, e3, e4, e5]
         return converted
 
-    def compute_gradient(self, samples, rb, iteration):  # 还没改所有的compute_gradient的输入参数
+    def compute_gradient(self, samples, rb, iteration):
         # the input of this function/the shape of samples is [6, batch_size, 29, dimensions]
         self.get_batch_data_lstm(samples, rb)
-        print(f'In ampc lines 170 show the length of samples is {len(samples)} \n')
-        for i in range(len(samples)):
-            print(f'The No.{i+1} is {samples[i].shape}\n')
+        # for i in range(len(samples)):
+        #     print(f'The No.{i+1} is {samples[i].shape}\n')
         original_samples = self.dimension_convert(samples)  # the size of original_samples is [6, batch_size, dimensions]
         self.get_batch_data(original_samples, rb)
         mb_obs = self.tf.constant(self.batch_data['batch_obs'])  # the size of mb_bos is [batch_size, dimensions]
+        mb_batch_obs = self.batch_data_lstm['batch_obs']  # mb_batch_obs.shape = (256, 29, 41)
+        print(f'In ampc lines 189 the type of mb_batch_obs is {type(mb_batch_obs)}')
         iteration = self.tf.convert_to_tensor(iteration, self.tf.int32)
         mb_ref_index = self.tf.constant(self.batch_data['batch_ref_index'], self.tf.int32)
 
@@ -191,7 +194,7 @@ class AMPCLearner(object):
             pg_grad, obj_v_grad, obj_v_loss, obj_loss, \
             punish_term_for_training, punish_loss, pg_loss, \
             real_punish_term, veh2veh4real, veh2road4real, pf, lstm_grad =\
-                self.forward_and_backward(mb_obs, iteration, mb_ref_index, )
+                self.forward_and_backward(mb_obs, iteration, mb_ref_index, mb_batch_obs)
 
             pg_grad, pg_grad_norm = self.tf.clip_by_global_norm(pg_grad, self.args.gradient_clip_norm)
             obj_v_grad, obj_v_grad_norm = self.tf.clip_by_global_norm(obj_v_grad, self.args.gradient_clip_norm)
