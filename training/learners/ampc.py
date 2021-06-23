@@ -164,14 +164,24 @@ class AMPCLearner(object):
         with writer.as_default():
             self.tf.summary.trace_export(name="policy_forward_and_backward", step=0)
 
+    def dimension_convert(self, samples):
+        # the input samples is a 6-length list
+        e0 = samples[0][:, 4, :]
+        e1 = samples[1][:, 4, :]
+        e2 = samples[2][:, 4]
+        e3 = samples[3][:, 4, :]
+        e4 = samples[4][:, 4]
+        e5 = samples[5][:, 4]
+        converted = [e0, e1, e2, e3, e4, e5]
+        return converted
+
     def compute_gradient(self, samples, rb, iteration):  # 还没改所有的compute_gradient的输入参数
         # the input of this function/the shape of samples is [6, batch_size, 29, dimensions]
         self.get_batch_data_lstm(samples, rb)
         print(f'In ampc lines 170 show the length of samples is {len(samples)} \n')
         for i in range(len(samples)):
-            print(f'The No.{i+1} is {np.array(samples[i]).shape}\n')
-        original_samples = samples[:,:,4,:]  # the size of original_samples is [6, batch_size, dimensions]
-        print(f'In ampc lines 170 show the length of original_samples is {original_samples.shape}')
+            print(f'The No.{i+1} is {samples[i].shape}\n')
+        original_samples = self.dimension_convert(samples)  # the size of original_samples is [6, batch_size, dimensions]
         self.get_batch_data(original_samples, rb)
         mb_obs = self.tf.constant(self.batch_data['batch_obs'])  # the size of mb_bos is [batch_size, dimensions]
         iteration = self.tf.convert_to_tensor(iteration, self.tf.int32)
