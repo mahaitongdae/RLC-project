@@ -171,11 +171,12 @@ class DistendReplyBuffer(ReplayBuffer):
             return continuity_judge
 
     def sample_with_idxes(self, idxes):
-        return list(self._encode_sample(idxes))
+        temp = list(self._encode_sample(idxes))
+        print(f'In buffer lines 175 the length of list of encode_sample is {len(temp)}')
+        return temp
 
     def sample(self, batch_size):
         idxes = self.sample_idxes(batch_size)
-        print(f'In buffer lines 178 the length of the idxes is {len(idxes)}')
         return self.sample_with_idxes(idxes)
 
     def _encode_sample(self, idxes):
