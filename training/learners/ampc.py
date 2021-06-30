@@ -84,8 +84,9 @@ class AMPCLearner(object):
         return pf
 
     def model_rollout_for_update(self, start_obses, ite, mb_ref_index, mb_batch_obs):  # start_obses.shape = (256, 41)
-        print(f'In ampc lines 87 the shape of the input (start_obses (256,41) of function model_rollout_for_update is {start_obses.shape}\n ')
+        print(f'In ampc lines 87 the shape of the input start_obses (256,41) of function model_rollout_for_update is {start_obses.shape}\n ')
         start_obses = self.tf.tile(start_obses, [self.M, 1])
+        # mb_batch_obs = self.tf.tile(mb_batch_obs, [self.M, 1])
         print(f'In ampc lines 89 the shape of the start_obses is changed to {start_obses.shape}\n ')
         self.model.reset(start_obses, mb_ref_index)
         rewards_sum = self.tf.zeros((start_obses.shape[0],))
@@ -162,7 +163,7 @@ class AMPCLearner(object):
         mb_obs = self.batch_data['batch_obs']
         self.tf.summary.trace_on(graph=True, profiler=False)
         self.forward_and_backward(mb_obs, self.tf.convert_to_tensor(0, self.tf.int32),
-                                  self.tf.zeros((len(mb_obs),), dtype=self.tf.int32))
+                                  self.tf.zeros((len(mb_obs),), self.batch_data_lstm['batch_obs'], dtype=self.tf.int32))
         with writer.as_default():
             self.tf.summary.trace_export(name="policy_forward_and_backward", step=0)
 
@@ -185,7 +186,9 @@ class AMPCLearner(object):
         original_samples = self.dimension_convert(samples)  # the size of original_samples is [6, batch_size, dimensions]
         self.get_batch_data(original_samples, rb)
         mb_obs = self.tf.constant(self.batch_data['batch_obs'])  # the size of mb_bos is [batch_size, dimensions]
-        mb_batch_obs = self.batch_data_lstm['batch_obs']  # mb_batch_obs.shape = (256, 29, 41)
+        mb_batch_obs = self.tf.constant(self.batch_data_lstm['batch_obs'])  # mb_batch_obs.shape = (256, 29, 41)
+        print(f'In ampc lines 189 the shape of mb_batch_obs is {mb_batch_obs.shape}')
+        print(f'In ampc lines 189 the first element of mb_batch_obs is {mb_batch_obs[0]}')
         print(f'In ampc lines 189 the type of mb_batch_obs is {type(mb_batch_obs)}')
         iteration = self.tf.convert_to_tensor(iteration, self.tf.int32)
         mb_ref_index = self.tf.constant(self.batch_data['batch_ref_index'], self.tf.int32)
