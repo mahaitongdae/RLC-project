@@ -100,6 +100,7 @@ class CrossroadEnd2end(gym.Env):
     def reset(self, **kwargs):  # kwargs include three keys
         self.ref_path = ReferencePath(self.training_task, **kwargs)
         self.init_state = self._reset_init_state()
+        self.ref_path.set_path(traj_mode='static_traj', path_index=np.random.choice(len(self.ref_path.path_list)))
         self.traffic.init_traffic(self.init_state)
         self.traffic.sim_step()
         ego_dynamics = self._get_ego_dynamics([self.init_state['ego']['v_x'],
@@ -387,8 +388,8 @@ class CrossroadEnd2end(gym.Env):
             if self.training_task != 'right':
                 if (v_light != 0 and ego_y < -CROSSROAD_D_HEIGHT) \
                         or (self.virtual_red_light_vehicle and ego_y < -CROSSROAD_D_HEIGHT):
-                    dl.append(dict(x=LANE_WIDTH_UD/2, y=-CROSSROAD_D_HEIGHT + 2.5, v=0., phi=90, l=5, w=2.5, route=None))
-                    du.append(dict(x=LANE_WIDTH_UD/2, y=-CROSSROAD_D_HEIGHT + 2.5, v=0., phi=90, l=5, w=2.5, route=None))
+                    dl.append(dict(x=LANE_WIDTH_UD/2, y=-CROSSROAD_D_HEIGHT + 2.5, v=0., phi=90, l=5, w=2.5, route=None, pad=0.))
+                    du.append(dict(x=LANE_WIDTH_UD/2, y=-CROSSROAD_D_HEIGHT + 2.5, v=0., phi=90, l=5, w=2.5, route=None, pad=0.))
             # todo: whether add dr for left and straight; right task has no virtual front car
 
             # fetch veh in range
@@ -484,7 +485,11 @@ class CrossroadEnd2end(gym.Env):
             list_of_interested_veh_dict.extend(part)
 
         for veh in list_of_interested_veh_dict:
-            veh_x, veh_y, veh_v, veh_phi, veh_pad = veh['x'], veh['y'], veh['v'], veh['phi'], veh['pad']
+            try:
+                veh_x, veh_y, veh_v, veh_phi, veh_pad = veh['x'], veh['y'], veh['v'], veh['phi'], veh['pad']
+            except:
+                print(veh)
+                raise KeyError
             vehs_vector.extend([veh_x, veh_y, veh_v, veh_phi])
             padding_vector.extend([veh_pad])
         self.per_veh_info_dim = 4
@@ -497,7 +502,7 @@ class CrossroadEnd2end(gym.Env):
         return orig_x, orig_y
 
     def _reset_init_state(self):
-        middle_num = len(self.ref_path.path[0]) - 2400
+        middle_num = len(self.ref_path.path[0]) - 1400
         ref4init = ReferencePath(self.training_task)
         random_index = int(np.random.random() * (600 + middle_num - 200)) + 600
         x, y, phi = ref4init.indexs2points(random_index)

@@ -225,8 +225,8 @@ class EnvironmentModel(object):  # all tensors
                     for other_point_index, veh_point in enumerate([veh_front_points, veh_rear_points]):
                         constraint_index = veh_index * self.per_veh_constraint_dim + ego_point_index * 2 + other_point_index
                         veh2veh_dist = -tf.sqrt(
-                            tf.square(ego_point[0] - veh_point[0]) + tf.square(ego_point[1] - veh_point[1])) + 2.5
-                        veh2veh4real += tf.where(veh2veh_dist > 1, tf.square(veh2veh_dist - 1), tf.zeros_like(veh_infos[:, 0]))
+                            tf.square(ego_point[0] - veh_point[0]) + tf.square(ego_point[1] - veh_point[1])) + 2.6
+                        veh2veh4real += tf.where(veh2veh_dist > 0.9, tf.square(veh2veh_dist - 0.9), tf.zeros_like(veh_infos[:, 0]))
                         # update veh2veh dist last
                         constraints_list = constraints_list.write(constraint_index, 5 * veh2veh_dist)
                         # print(constraint_index)
