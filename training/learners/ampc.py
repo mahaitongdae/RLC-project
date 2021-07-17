@@ -101,7 +101,7 @@ class AMPCLearner(object):
         # con_v_pred = self.policy_with_value.compute_con_v(processed_obses)
 
         # LSTMNet loss 这里还没有处理一下周车相对于自车的状态
-        lstm_obs = self.batch_data_lstm['batch_obs']  # [batch_size, 29, dimensions]
+        lstm_obs = self.batch_data_lstm['batch_obs']  # lstm_obs : [batch_size, 29, dimensions]
         surroundings_loss = []
 
         for i in range(self.num_rollout_list_for_policy_update[0]):
@@ -115,7 +115,9 @@ class AMPCLearner(object):
             veh2road4real_sum += veh2road4real
             # lstm part
             preds = self.policy_with_value.predict_multi_vehs(lstm_obs, i)
-            loss_square = self.tf.square(preds - lstm_obs[:, i + 4, 9:]) # lstm_obs[:, i+4, all surrounding vehicles]
+            print(f'In ampc lines 118 the shape of preds is {len(preds)} and the first two elements are {preds[0]} \n {preds[1]} and its type is {type(preds)}')
+            print(f'In ampc lines 119 the shape of lstm_obs[:, i + 4, 9:] is {lstm_obs[:, i + 4, 9:].shape}')
+            loss_square = self.tf.square(preds - lstm_obs[:, i + 4, 9:]) # lstm_obs[:, i+4, all surrounding vehicles]  # lstm_obs : [batch_size, 29, dimensions]
             surroundings_loss.append(loss_square)
 
 
